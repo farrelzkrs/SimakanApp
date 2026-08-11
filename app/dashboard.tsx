@@ -11,18 +11,27 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// SVG Area Chart Data URI for the smooth income graph
-const CHART_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTRBMzlGIiBzdG9wLW9wYWNpdHk9IjAuNSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzE0QTM5RiIgc3RvcC1vcGFjaXR5PSIwLjA1Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IEwzNTAsMTAwIEwwLDEwMCBaIiBmaWxsPSJ1cmwoI2dyYWQpIi8+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IiBmaWxsPSJub25lIiBzdHJva2U9IiMxNEEzOUYiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+`;
+// SVG Area Chart Data URI for Income graph (Teal Theme)
+const INCOME_CHART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTRBMzlGIiBzdG9wLW9wYWNpdHk9IjAuNSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzE0QTM5RiIgc3RvcC1vcGFjaXR5PSIwLjA1Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IEwzNTAsMTAwIEwwLDEwMCBaIiBmaWxsPSJ1cmwoI2dyYWQpIi8+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IiBmaWxsPSJub25lIiBzdHJva2U9IiMxNEEzOUYiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+`;
+
+// SVG Area Chart Data URI for Expense graph (Coral/Salmon Red Theme)
+const EXPENSE_CHART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRSZWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjRkE2QjZDIiBzdG9wLW9wYWNpdHk9IjAuNjUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNGQTZCNkMiIHN0b3Atb3BhY2l0eT0iMC4wNSIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGQ9Ik0wLDgwIEM0MCw5MCA3MCw2MCAxMTAsNjUgQzE1MCw3MCAxODAsOTAgMjIwLDcwIEMyNjAsNTAgMjgwLDY1IDM1MCw1NSBMMzUwLDEwMCBMMCwxMDAgWiIgZmlsbD0idXJsKCNncmFkUmVkKSIvPjxwYXRoIGQ9Ik0wLDgwIEM0MCw5MCA3MCw2MCAxMTAsNjUgQzE1MCw3MCAxODAsOTAgMjIwLDcwIEMyNjAsNTAgMjgwLDY1IDM1MCw1NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkE2QjZDIiBzdHJva2Utd2lkdGg9IjIuNSIvPjwvc3ZnPg==`;
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
-  const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet' | 'profile'>('home');
+  const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
+
+  const isIncome = activeTab === 'income';
+  const themeAccentColor = isIncome ? '#14A39F' : '#FA6B6C';
 
   return (
     <View style={styles.container}>
@@ -30,14 +39,14 @@ export default function DashboardScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + bottomInset }]}
       >
         {/* Top Header Section (Teal Card) */}
         <View style={styles.headerContainer}>
           <SafeAreaView style={styles.headerSafeArea}>
             {/* Top Bar: Greeting & Notification */}
             <View style={styles.topBar}>
-              <Text style={styles.greetingText}>Hi, Syahrul!</Text>
+              <Text style={styles.greetingText}>Halo, Syahrul!</Text>
 
               <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
                 <Ionicons name="notifications" size={24} color="#FFFFFF" />
@@ -48,7 +57,7 @@ export default function DashboardScreen() {
             {/* Balance Display */}
             <View style={styles.balanceContainer}>
               <Text style={styles.balanceAmount}>$ 90.000,00</Text>
-              <Text style={styles.balanceLabel}>Your total balance</Text>
+              <Text style={styles.balanceLabel}>Total saldo Anda</Text>
             </View>
           </SafeAreaView>
         </View>
@@ -60,17 +69,17 @@ export default function DashboardScreen() {
               activeOpacity={0.9}
               style={[
                 styles.toggleButton,
-                activeTab === 'income' && styles.toggleButtonActive,
+                isIncome && styles.toggleButtonIncomeActive,
               ]}
               onPress={() => setActiveTab('income')}
             >
               <Text
                 style={[
                   styles.toggleText,
-                  activeTab === 'income' && styles.toggleTextActive,
+                  isIncome && styles.toggleTextActive,
                 ]}
               >
-                Income
+                Pemasukan
               </Text>
             </TouchableOpacity>
 
@@ -78,17 +87,17 @@ export default function DashboardScreen() {
               activeOpacity={0.9}
               style={[
                 styles.toggleButton,
-                activeTab === 'expense' && styles.toggleButtonActive,
+                !isIncome && styles.toggleButtonExpenseActive,
               ]}
               onPress={() => setActiveTab('expense')}
             >
               <Text
                 style={[
                   styles.toggleText,
-                  activeTab === 'expense' && styles.toggleTextActive,
+                  !isIncome && styles.toggleTextActive,
                 ]}
               >
-                Expense
+                Pengeluaran
               </Text>
             </TouchableOpacity>
           </View>
@@ -96,102 +105,191 @@ export default function DashboardScreen() {
 
         {/* Main Body Content */}
         <View style={styles.bodyContent}>
-          {/* Income Chart Card */}
+          {/* Income / Expense Chart Card */}
           <View style={styles.chartCard}>
             <View style={styles.chartHeader}>
-              <Text style={styles.chartSubtitle}>This month income</Text>
-              <Text style={styles.chartTitle}>$ 7.000,00</Text>
+              <Text style={styles.chartSubtitle}>
+                {isIncome ? 'Pemasukan bulan ini' : 'Pengeluaran bulan ini'}
+              </Text>
+              <Text style={styles.chartTitle}>
+                {isIncome ? '$ 7.000,00' : '$ 472,00'}
+              </Text>
             </View>
 
             {/* Area Line Chart Area */}
             <View style={styles.chartArea}>
               <Image
-                source={{ uri: CHART_SVG_URI }}
+                source={{ uri: isIncome ? INCOME_CHART_SVG : EXPENSE_CHART_SVG }}
                 style={styles.chartSvg}
                 contentFit="fill"
               />
 
               {/* Peak Point Tooltip Badge */}
               <View style={styles.chartTooltipContainer}>
-                <View style={styles.chartTooltipPill}>
-                  <Text style={styles.chartTooltipText}>$ 7.000,00</Text>
+                <View
+                  style={[
+                    styles.chartTooltipPill,
+                    { backgroundColor: themeAccentColor },
+                  ]}
+                >
+                  <Text style={styles.chartTooltipText}>
+                    {isIncome ? '$ 7.000,00' : '$ 472,00'}
+                  </Text>
                 </View>
-                <View style={styles.chartDotPoint} />
+                <View
+                  style={[
+                    styles.chartDotPoint,
+                    !isIncome && { backgroundColor: '#FED7AA' },
+                  ]}
+                />
               </View>
             </View>
           </View>
 
-          {/* Recent Income Section */}
+          {/* Recent Transactions Section */}
           <View style={styles.recentSection}>
-            <Text style={styles.recentSectionTitle}>Your recent income</Text>
+            <Text style={styles.recentSectionTitle}>
+              {isIncome ? 'Pemasukan terbaru Anda' : 'Pengeluaran terbaru Anda'}
+            </Text>
 
             <View style={styles.transactionCard}>
-              {/* Item 1: Maju Jaya Coffee */}
-              <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-                <View style={styles.transactionLeft}>
-                  <View style={[styles.avatarCircle, { backgroundColor: '#FFEDD5' }]}>
-                    <Ionicons name="cafe-outline" size={22} color="#EA580C" />
-                    <View style={styles.arrowBadge}>
-                      <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+              {isIncome ? (
+                <>
+                  {/* Item 1: Maju Jaya Coffee */}
+                  <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                    <View style={styles.transactionLeft}>
+                      <View style={[styles.avatarCircle, { backgroundColor: '#FFEDD5' }]}>
+                        <Ionicons name="cafe-outline" size={22} color="#EA580C" />
+                        <View style={[styles.arrowBadge, { backgroundColor: '#14A39F' }]}>
+                          <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                        </View>
+                      </View>
+                      <View style={styles.transactionMeta}>
+                        <Text style={styles.transactionName}>Maju Jaya Coffee</Text>
+                        <Text style={styles.transactionDate}>4 Oktober 2020</Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.transactionMeta}>
-                    <Text style={styles.transactionName}>Maju Jaya Coffee</Text>
-                    <Text style={styles.transactionDate}>October 4, 2020</Text>
-                  </View>
-                </View>
-                <Text style={styles.transactionAmount}>$ 2.000,00</Text>
-              </TouchableOpacity>
+                    <Text style={styles.transactionAmount}>$ 2.000,00</Text>
+                  </TouchableOpacity>
 
-              <View style={styles.divider} />
+                  <View style={styles.divider} />
 
-              {/* Item 2: Zeus Motorworks */}
-              <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-                <View style={styles.transactionLeft}>
-                  <View style={[styles.avatarCircle, { backgroundColor: '#E2E8F0' }]}>
-                    <Feather name="settings" size={20} color="#475569" />
-                    <View style={styles.arrowBadge}>
-                      <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                  {/* Item 2: Zeus Motorworks */}
+                  <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                    <View style={styles.transactionLeft}>
+                      <View style={[styles.avatarCircle, { backgroundColor: '#E2E8F0' }]}>
+                        <Feather name="settings" size={20} color="#475569" />
+                        <View style={[styles.arrowBadge, { backgroundColor: '#14A39F' }]}>
+                          <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                        </View>
+                      </View>
+                      <View style={styles.transactionMeta}>
+                        <Text style={styles.transactionName}>Zeus Motorworks</Text>
+                        <Text style={styles.transactionDate}>4 Oktober 2020</Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.transactionMeta}>
-                    <Text style={styles.transactionName}>Zeus Motorworks</Text>
-                    <Text style={styles.transactionDate}>October 4, 2020</Text>
-                  </View>
-                </View>
-                <Text style={styles.transactionAmount}>$ 4.000,00</Text>
-              </TouchableOpacity>
+                    <Text style={styles.transactionAmount}>$ 4.000,00</Text>
+                  </TouchableOpacity>
 
-              <View style={styles.divider} />
+                  <View style={styles.divider} />
 
-              {/* Item 3: Freelance Design */}
-              <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-                <View style={styles.transactionLeft}>
-                  <View style={[styles.avatarCircle, { backgroundColor: '#FEF08A' }]}>
-                    <Ionicons name="color-palette-outline" size={22} color="#CA8A04" />
-                    <View style={styles.arrowBadge}>
-                      <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                  {/* Item 3: Freelance Design */}
+                  <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                    <View style={styles.transactionLeft}>
+                      <View style={[styles.avatarCircle, { backgroundColor: '#FEF08A' }]}>
+                        <Ionicons name="color-palette-outline" size={22} color="#CA8A04" />
+                        <View style={[styles.arrowBadge, { backgroundColor: '#14A39F' }]}>
+                          <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                        </View>
+                      </View>
+                      <View style={styles.transactionMeta}>
+                        <Text style={styles.transactionName}>Desain Freelance</Text>
+                        <Text style={styles.transactionDate}>4 Oktober 2020</Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.transactionMeta}>
-                    <Text style={styles.transactionName}>Freelance Design</Text>
-                    <Text style={styles.transactionDate}>October 4, 2020</Text>
-                  </View>
-                </View>
-                <Text style={styles.transactionAmount}>$ 1.000,00</Text>
-              </TouchableOpacity>
+                    <Text style={styles.transactionAmount}>$ 1.000,00</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  {/* Item 1: Boarding house */}
+                  <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                    <View style={styles.transactionLeft}>
+                      <View style={[styles.avatarCircle, { backgroundColor: '#DBEAFE' }]}>
+                        <Ionicons name="home-outline" size={22} color="#2563EB" />
+                        <View style={[styles.arrowBadge, { backgroundColor: '#FA6B6C' }]}>
+                          <Ionicons name="arrow-up" size={10} color="#FFFFFF" style={{ transform: [{ rotate: '45deg' }] }} />
+                        </View>
+                      </View>
+                      <View style={styles.transactionMeta}>
+                        <Text style={styles.transactionName}>Uang Kos</Text>
+                        <Text style={styles.transactionDate}>4 Oktober 2020</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.transactionAmount}>$ 200,00</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.divider} />
+
+                  {/* Item 2: Netflix */}
+                  <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                    <View style={styles.transactionLeft}>
+                      <View style={[styles.avatarCircle, { backgroundColor: '#18181B' }]}>
+                        <Text style={{ color: '#E50914', fontWeight: '900', fontSize: 20 }}>N</Text>
+                        <View style={[styles.arrowBadge, { backgroundColor: '#FA6B6C' }]}>
+                          <Ionicons name="arrow-up" size={10} color="#FFFFFF" style={{ transform: [{ rotate: '45deg' }] }} />
+                        </View>
+                      </View>
+                      <View style={styles.transactionMeta}>
+                        <Text style={styles.transactionName}>Netflix</Text>
+                        <Text style={styles.transactionDate}>4 Oktober 2020</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.transactionAmount}>$ 12,00</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.divider} />
+
+                  {/* Item 3: Consumption */}
+                  <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                    <View style={styles.transactionLeft}>
+                      <View style={[styles.avatarCircle, { backgroundColor: '#FEF3C7' }]}>
+                        <Ionicons name="restaurant-outline" size={22} color="#D97706" />
+                        <View style={[styles.arrowBadge, { backgroundColor: '#FA6B6C' }]}>
+                          <Ionicons name="arrow-up" size={10} color="#FFFFFF" style={{ transform: [{ rotate: '45deg' }] }} />
+                        </View>
+                      </View>
+                      <View style={styles.transactionMeta}>
+                        <Text style={styles.transactionName}>Konsumsi</Text>
+                        <Text style={styles.transactionDate}>4 Oktober 2020</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.transactionAmount}>$ 250,00</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         </View>
       </ScrollView>
 
       {/* Floating Action Button (+) */}
-      <TouchableOpacity activeOpacity={0.85} style={styles.fabButton}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        style={[
+          styles.fabButton,
+          {
+            backgroundColor: themeAccentColor,
+            shadowColor: themeAccentColor,
+            bottom: 72 + bottomInset,
+          },
+        ]}
+      >
         <Ionicons name="add" size={32} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.navItem}
@@ -207,7 +305,10 @@ export default function DashboardScreen() {
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.navItem}
-          onPress={() => setActiveNav('chart')}
+          onPress={() => {
+            setActiveNav('chart');
+            router.push('/statistics');
+          }}
         >
           <Ionicons
             name={activeNav === 'chart' ? 'stats-chart' : 'stats-chart-outline'}
@@ -219,24 +320,15 @@ export default function DashboardScreen() {
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.navItem}
-          onPress={() => setActiveNav('wallet')}
+          onPress={() => {
+            setActiveNav('wallet');
+            router.push('/inventory');
+          }}
         >
           <Ionicons
             name={activeNav === 'wallet' ? 'card' : 'card-outline'}
             size={26}
             color={activeNav === 'wallet' ? '#14A39F' : '#94A3B8'}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => setActiveNav('profile')}
-        >
-          <Ionicons
-            name={activeNav === 'profile' ? 'person' : 'person-outline'}
-            size={26}
-            color={activeNav === 'profile' ? '#14A39F' : '#94A3B8'}
           />
         </TouchableOpacity>
       </View>
@@ -329,8 +421,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toggleButtonActive: {
+  toggleButtonIncomeActive: {
     backgroundColor: '#14A39F',
+  },
+  toggleButtonExpenseActive: {
+    backgroundColor: '#FA6B6C',
   },
   toggleText: {
     fontSize: 15,
@@ -389,7 +484,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chartTooltipPill: {
-    backgroundColor: '#14A39F',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -454,7 +548,6 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#14A39F',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
@@ -490,10 +583,8 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#14A39F',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#14A39F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
