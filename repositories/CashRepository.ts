@@ -8,11 +8,11 @@ export class CashRepository {
   async findMain(): Promise<Cash | null> {
     return this.db.getFirstAsync<Cash>(
       'SELECT * FROM cash WHERE id = ?',
-      ['CSH-utama']
+      [1]
     );
   }
 
-  async findById(id: string): Promise<Cash | null> {
+  async findById(id: number): Promise<Cash | null> {
     return this.db.getFirstAsync<Cash>(
       'SELECT * FROM cash WHERE id = ?',
       [id]
@@ -23,7 +23,7 @@ export class CashRepository {
     return this.db.getAllAsync<Cash>('SELECT * FROM cash');
   }
 
-  async addIncome(cashId: string, amount: number): Promise<void> {
+  async addIncome(cashId: number, amount: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE cash SET
         current_balance = current_balance + ?,
@@ -35,7 +35,7 @@ export class CashRepository {
     );
   }
 
-  async addExpense(cashId: string, amount: number): Promise<void> {
+  async addExpense(cashId: number, amount: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE cash SET
         current_balance = current_balance - ?,
@@ -47,7 +47,7 @@ export class CashRepository {
     );
   }
 
-  async reverseIncome(cashId: string, amount: number): Promise<void> {
+  async reverseIncome(cashId: number, amount: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE cash SET
         current_balance = current_balance - ?,
@@ -58,7 +58,7 @@ export class CashRepository {
     );
   }
 
-  async reverseExpense(cashId: string, amount: number): Promise<void> {
+  async reverseExpense(cashId: number, amount: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE cash SET
         current_balance = current_balance + ?,
@@ -69,7 +69,7 @@ export class CashRepository {
     );
   }
 
-  async updateOpeningBalance(cashId: string, amount: number): Promise<void> {
+  async updateOpeningBalance(cashId: number, amount: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE cash SET
         opening_balance = ?,

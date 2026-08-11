@@ -17,7 +17,7 @@ export class InventoryService {
     return this.itemRepo.findAll();
   }
 
-  async getItemById(id: string): Promise<Item | null> {
+  async getItemById(id: number): Promise<Item | null> {
     return this.itemRepo.findById(id);
   }
 
@@ -29,7 +29,7 @@ export class InventoryService {
     return this.itemRepo.findByBarcode(barcode);
   }
 
-  async createItem(input: CreateItemInput): Promise<string> {
+  async createItem(input: CreateItemInput): Promise<number> {
     if (input.code) {
       const existing = await this.itemRepo.findByCode(input.code);
       if (existing) {
@@ -54,7 +54,7 @@ export class InventoryService {
     return id;
   }
 
-  async updateItem(id: string, input: UpdateItemInput): Promise<void> {
+  async updateItem(id: number, input: UpdateItemInput): Promise<void> {
     const item = await this.itemRepo.findById(id);
     if (!item) {
       throw new Error('Item tidak ditemukan');
@@ -70,7 +70,7 @@ export class InventoryService {
     await this.itemRepo.update(id, input);
   }
 
-  async adjustStock(itemId: string, newStock: number, description?: string): Promise<void> {
+  async adjustStock(itemId: number, newStock: number, description?: string): Promise<void> {
     await this.db.withTransactionAsync(async () => {
       const item = await this.itemRepo.findById(itemId);
       if (!item) {
@@ -92,7 +92,7 @@ export class InventoryService {
     });
   }
 
-  async deleteItem(id: string, deletedBy?: string): Promise<void> {
+  async deleteItem(id: number, deletedBy?: number): Promise<void> {
     await this.itemRepo.softDelete(id, deletedBy);
   }
 
@@ -104,7 +104,7 @@ export class InventoryService {
     return this.itemRepo.countLowStock();
   }
 
-  async getStockHistory(itemId: string, limit: number = 50): Promise<StockMovement[]> {
+  async getStockHistory(itemId: number, limit: number = 50): Promise<StockMovement[]> {
     return this.stockMovementRepo.findByItem(itemId, limit);
   }
 

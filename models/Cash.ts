@@ -1,5 +1,5 @@
 export interface Cash {
-  id: string;
+  id: number;
   cash_name: string | null;
   opening_balance: number;
   current_balance: number;

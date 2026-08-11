@@ -1,6 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { CreateTransactionInput, TransactionWithCategory } from '../models/Transaction';
-import { generateId } from '../utils/generateId';
 import { toSQLiteDateTime } from '../utils/dateUtils';
 
 export class TransactionRepository {
@@ -18,7 +17,7 @@ export class TransactionRepository {
     );
   }
 
-  async findById(id: string): Promise<TransactionWithCategory | null> {
+  async findById(id: number): Promise<TransactionWithCategory | null> {
     return this.db.getFirstAsync<TransactionWithCategory>(
       `SELECT t.*, c.name as category_name, c.icon as category_icon, c.color as category_color 
        FROM transactions t 
@@ -63,24 +62,22 @@ export class TransactionRepository {
     );
   }
 
-  async create(input: CreateTransactionInput): Promise<string> {
-    const id = generateId('TRX');
+  async create(input: CreateTransactionInput): Promise<number> {
     const transactionNo = await this.generateTransactionNo(input.transaction_type);
 
-    await this.db.runAsync(
+    const result = await this.db.runAsync(
       `INSERT INTO transactions (
-        id, transaction_no, transaction_date, transaction_type, 
+        transaction_no, transaction_date, transaction_type, 
         category_id, cash_id, item_id, quantity, unit_price, 
         nominal, payment_method, reference_number, attachment, 
         description, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        id,
         transactionNo,
         input.transaction_date,
         input.transaction_type,
         input.category_id,
-        input.cash_id ?? 'CSH-utama',
+        input.cash_id ?? 1,
         input.item_id ?? null,
         input.quantity ?? 0,
         input.unit_price ?? 0,
@@ -93,10 +90,10 @@ export class TransactionRepository {
       ]
     );
 
-    return id;
+    return result.lastInsertRowId;
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<void> {
+  async softDelete(id: number, deletedBy?: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE transactions SET 
         is_deleted = 1, 
