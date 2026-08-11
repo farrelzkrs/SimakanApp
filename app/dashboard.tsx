@@ -1,0 +1,522 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Dimensions,
+  SafeAreaView,
+  Platform,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Image } from 'expo-image';
+import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// SVG Area Chart Data URI for the smooth income graph
+const CHART_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTRBMzlGIiBzdG9wLW9wYWNpdHk9IjAuNSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzE0QTM5RiIgc3RvcC1vcGFjaXR5PSIwLjA1Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IEwzNTAsMTAwIEwwLDEwMCBaIiBmaWxsPSJ1cmwoI2dyYWQpIi8+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IiBmaWxsPSJub25lIiBzdHJva2U9IiMxNEEzOUYiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+`;
+
+export default function DashboardScreen() {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
+  const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet' | 'profile'>('home');
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="light" />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Top Header Section (Teal Card) */}
+        <View style={styles.headerContainer}>
+          <SafeAreaView style={styles.headerSafeArea}>
+            {/* Top Bar: Greeting & Notification */}
+            <View style={styles.topBar}>
+              <Text style={styles.greetingText}>Hi, Syahrul!</Text>
+
+              <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
+                <Ionicons name="notifications" size={24} color="#FFFFFF" />
+                <View style={styles.notificationBadge} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Balance Display */}
+            <View style={styles.balanceContainer}>
+              <Text style={styles.balanceAmount}>$ 90.000,00</Text>
+              <Text style={styles.balanceLabel}>Your total balance</Text>
+            </View>
+          </SafeAreaView>
+        </View>
+
+        {/* Floating Income / Expense Toggle Card */}
+        <View style={styles.toggleCardContainer}>
+          <View style={styles.toggleCard}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[
+                styles.toggleButton,
+                activeTab === 'income' && styles.toggleButtonActive,
+              ]}
+              onPress={() => setActiveTab('income')}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  activeTab === 'income' && styles.toggleTextActive,
+                ]}
+              >
+                Income
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[
+                styles.toggleButton,
+                activeTab === 'expense' && styles.toggleButtonActive,
+              ]}
+              onPress={() => setActiveTab('expense')}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  activeTab === 'expense' && styles.toggleTextActive,
+                ]}
+              >
+                Expense
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Main Body Content */}
+        <View style={styles.bodyContent}>
+          {/* Income Chart Card */}
+          <View style={styles.chartCard}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartSubtitle}>This month income</Text>
+              <Text style={styles.chartTitle}>$ 7.000,00</Text>
+            </View>
+
+            {/* Area Line Chart Area */}
+            <View style={styles.chartArea}>
+              <Image
+                source={{ uri: CHART_SVG_URI }}
+                style={styles.chartSvg}
+                contentFit="fill"
+              />
+
+              {/* Peak Point Tooltip Badge */}
+              <View style={styles.chartTooltipContainer}>
+                <View style={styles.chartTooltipPill}>
+                  <Text style={styles.chartTooltipText}>$ 7.000,00</Text>
+                </View>
+                <View style={styles.chartDotPoint} />
+              </View>
+            </View>
+          </View>
+
+          {/* Recent Income Section */}
+          <View style={styles.recentSection}>
+            <Text style={styles.recentSectionTitle}>Your recent income</Text>
+
+            <View style={styles.transactionCard}>
+              {/* Item 1: Maju Jaya Coffee */}
+              <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                <View style={styles.transactionLeft}>
+                  <View style={[styles.avatarCircle, { backgroundColor: '#FFEDD5' }]}>
+                    <Ionicons name="cafe-outline" size={22} color="#EA580C" />
+                    <View style={styles.arrowBadge}>
+                      <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                    </View>
+                  </View>
+                  <View style={styles.transactionMeta}>
+                    <Text style={styles.transactionName}>Maju Jaya Coffee</Text>
+                    <Text style={styles.transactionDate}>October 4, 2020</Text>
+                  </View>
+                </View>
+                <Text style={styles.transactionAmount}>$ 2.000,00</Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              {/* Item 2: Zeus Motorworks */}
+              <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                <View style={styles.transactionLeft}>
+                  <View style={[styles.avatarCircle, { backgroundColor: '#E2E8F0' }]}>
+                    <Feather name="settings" size={20} color="#475569" />
+                    <View style={styles.arrowBadge}>
+                      <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                    </View>
+                  </View>
+                  <View style={styles.transactionMeta}>
+                    <Text style={styles.transactionName}>Zeus Motorworks</Text>
+                    <Text style={styles.transactionDate}>October 4, 2020</Text>
+                  </View>
+                </View>
+                <Text style={styles.transactionAmount}>$ 4.000,00</Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              {/* Item 3: Freelance Design */}
+              <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
+                <View style={styles.transactionLeft}>
+                  <View style={[styles.avatarCircle, { backgroundColor: '#FEF08A' }]}>
+                    <Ionicons name="color-palette-outline" size={22} color="#CA8A04" />
+                    <View style={styles.arrowBadge}>
+                      <Ionicons name="arrow-up" size={10} color="#FFFFFF" />
+                    </View>
+                  </View>
+                  <View style={styles.transactionMeta}>
+                    <Text style={styles.transactionName}>Freelance Design</Text>
+                    <Text style={styles.transactionDate}>October 4, 2020</Text>
+                  </View>
+                </View>
+                <Text style={styles.transactionAmount}>$ 1.000,00</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Floating Action Button (+) */}
+      <TouchableOpacity activeOpacity={0.85} style={styles.fabButton}>
+        <Ionicons name="add" size={32} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* Bottom Navigation Bar */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.navItem}
+          onPress={() => setActiveNav('home')}
+        >
+          <Ionicons
+            name={activeNav === 'home' ? 'home' : 'home-outline'}
+            size={26}
+            color={activeNav === 'home' ? '#14A39F' : '#94A3B8'}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.navItem}
+          onPress={() => setActiveNav('chart')}
+        >
+          <Ionicons
+            name={activeNav === 'chart' ? 'stats-chart' : 'stats-chart-outline'}
+            size={24}
+            color={activeNav === 'chart' ? '#14A39F' : '#94A3B8'}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.navItem}
+          onPress={() => setActiveNav('wallet')}
+        >
+          <Ionicons
+            name={activeNav === 'wallet' ? 'card' : 'card-outline'}
+            size={26}
+            color={activeNav === 'wallet' ? '#14A39F' : '#94A3B8'}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.navItem}
+          onPress={() => setActiveNav('profile')}
+        >
+          <Ionicons
+            name={activeNav === 'profile' ? 'person' : 'person-outline'}
+            size={26}
+            color={activeNav === 'profile' ? '#14A39F' : '#94A3B8'}
+          />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F4F7F6',
+  },
+  scrollContent: {
+    paddingBottom: 110,
+  },
+  headerContainer: {
+    backgroundColor: '#14A39F',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    paddingBottom: 40,
+  },
+  headerSafeArea: {
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'android' ? 40 : 10,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  greetingText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
+    borderColor: '#14A39F',
+  },
+  balanceContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  balanceAmount: {
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  balanceLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '400',
+  },
+  toggleCardContainer: {
+    alignItems: 'center',
+    marginTop: -28,
+    zIndex: 10,
+  },
+  toggleCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 5,
+    width: SCREEN_WIDTH * 0.72,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: '#14A39F',
+  },
+  toggleText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  toggleTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  bodyContent: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  chartCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingTop: 18,
+    marginBottom: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  chartHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  chartSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  chartTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  chartArea: {
+    height: 120,
+    width: '100%',
+    position: 'relative',
+    justifyContent: 'flex-end',
+  },
+  chartSvg: {
+    width: '100%',
+    height: '100%',
+  },
+  chartTooltipContainer: {
+    position: 'absolute',
+    right: 70,
+    top: 25,
+    alignItems: 'center',
+  },
+  chartTooltipPill: {
+    backgroundColor: '#14A39F',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  chartTooltipText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  chartDotPoint: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F87171',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  recentSection: {
+    marginBottom: 20,
+  },
+  recentSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 14,
+  },
+  transactionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  transactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    position: 'relative',
+  },
+  arrowBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#14A39F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  transactionMeta: {
+    justifyContent: 'center',
+  },
+  transactionName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
+  fabButton: {
+    position: 'absolute',
+    right: 24,
+    bottom: 85,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#14A39F',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#14A39F',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 99,
+  },
+  bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingBottom: Platform.OS === 'ios' ? 15 : 0,
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+});
