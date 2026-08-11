@@ -55,10 +55,10 @@ export default function OnboardingScreen() {
       {/* Bottom Content Section */}
       <SafeAreaView style={styles.bottomSection}>
         <View style={styles.contentContainer}>
-          <Text style={styles.titleText}>Making your life easier</Text>
+          <Text style={styles.titleText}>Membuat hidup Anda lebih mudah</Text>
           
           <Text style={styles.subtitleText}>
-            Manage your income and expense in easiest way with this app
+            Kelola pemasukan dan pengeluaran Anda dengan cara termudah menggunakan aplikasi ini
           </Text>
         </View>
 
@@ -69,7 +69,7 @@ export default function OnboardingScreen() {
             style={styles.getStartedButton}
             onPress={handleGetStarted}
           >
-            <Text style={styles.buttonText}>Get Started</Text>
+            <Text style={styles.buttonText}>Mulai Sekarang</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
