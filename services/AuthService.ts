@@ -21,7 +21,7 @@ export class AuthService {
     return user;
   }
 
-  async createUser(input: CreateUserInput): Promise<string> {
+  async createUser(input: CreateUserInput): Promise<number> {
     const existing = await this.userRepo.findByUsername(input.username);
     if (existing) {
       throw new Error('Username sudah digunakan');
@@ -34,7 +34,7 @@ export class AuthService {
     });
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+  async changePassword(userId: number, oldPassword: string, newPassword: string): Promise<void> {
     const user = await this.userRepo.findById(userId);
     if (!user) {
       throw new Error('User tidak ditemukan');
@@ -49,7 +49,7 @@ export class AuthService {
     await this.userRepo.update(userId, { password: hashedNew });
   }
 
-  async resetPassword(userId: string, newPassword: string, updatedBy?: string): Promise<void> {
+  async resetPassword(userId: number, newPassword: string, updatedBy?: number): Promise<void> {
     const hashedPassword = await this.hashPassword(newPassword);
     await this.userRepo.update(userId, {
       password: hashedPassword,

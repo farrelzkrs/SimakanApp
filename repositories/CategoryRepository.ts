@@ -1,6 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Category, CreateCategoryInput, UpdateCategoryInput } from '../models/Category';
-import { generateId } from '../utils/generateId';
 import { toSQLiteDateTime } from '../utils/dateUtils';
 
 export class CategoryRepository {
@@ -14,12 +13,12 @@ export class CategoryRepository {
 
   async findByType(type: 'IN' | 'OUT'): Promise<Category[]> {
     return this.db.getAllAsync<Category>(
-      'SELECT * FROM categories WHERE type = ? AND is_deleted = 0 ORDER BY name ASC',
+      'SELECT * FROM categories WHERE transaction_type = ? AND is_deleted = 0 ORDER BY name ASC',
       [type]
     );
   }
 
-  async findById(id: string): Promise<Category | null> {
+  async findById(id: number): Promise<Category | null> {
     return this.db.getFirstAsync<Category>(
       'SELECT * FROM categories WHERE id = ? AND is_deleted = 0',
       [id]
@@ -33,13 +32,11 @@ export class CategoryRepository {
     );
   }
 
-  async create(input: CreateCategoryInput): Promise<string> {
-    const id = generateId('CAT');
-    await this.db.runAsync(
-      `INSERT INTO categories (id, code, name, transaction_type, icon, color, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  async create(input: CreateCategoryInput): Promise<number> {
+    const result = await this.db.runAsync(
+      `INSERT INTO categories (code, name, transaction_type, icon, color, created_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        id,
         input.code ?? null,
         input.name,
         input.transaction_type,
@@ -48,10 +45,10 @@ export class CategoryRepository {
         input.created_by ?? null,
       ]
     );
-    return id;
+    return result.lastInsertRowId;
   }
 
-  async update(id: string, input: UpdateCategoryInput): Promise<void> {
+  async update(id: number, input: UpdateCategoryInput): Promise<void> {
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -98,7 +95,7 @@ export class CategoryRepository {
     );
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<void> {
+  async softDelete(id: number, deletedBy?: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE categories SET 
         is_deleted = 1, 

@@ -1,6 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { CreateUserInput, UpdateUserInput, User } from '../models/User';
-import { generateId } from '../utils/generateId';
 import { toSQLiteDateTime } from '../utils/dateUtils';
 
 export class UserRepository {
@@ -10,7 +9,7 @@ export class UserRepository {
     return this.db.getAllAsync<User>('SELECT * FROM users WHERE is_deleted = 0');
   }
 
-  async findById(id: string): Promise<User | null> {
+  async findById(id: number): Promise<User | null> {
     return this.db.getFirstAsync<User>(
       'SELECT * FROM users WHERE id = ? AND is_deleted = 0',
       [id]
@@ -24,17 +23,16 @@ export class UserRepository {
     );
   }
 
-  async create(input: CreateUserInput): Promise<string> {
-    const id = generateId('USR');
-    await this.db.runAsync(
-      `INSERT INTO users (id, username, password, name, role)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, input.username, input.password, input.name, input.role]
+  async create(input: CreateUserInput): Promise<number> {
+    const result = await this.db.runAsync(
+      `INSERT INTO users (username, password, name, role)
+       VALUES (?, ?, ?, ?)`,
+      [input.username, input.password, input.name, input.role]
     );
-    return id;
+    return result.lastInsertRowId;
   }
 
-  async update(id: string, input: UpdateUserInput): Promise<void> {
+  async update(id: number, input: UpdateUserInput): Promise<void> {
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -70,14 +68,14 @@ export class UserRepository {
     );
   }
 
-  async updateLastLogin(id: string): Promise<void> {
+  async updateLastLogin(id: number): Promise<void> {
     await this.db.runAsync(
       'UPDATE users SET last_login = ?, updated_at = ? WHERE id = ?',
       [toSQLiteDateTime(), toSQLiteDateTime(), id]
     );
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<void> {
+  async softDelete(id: number, deletedBy?: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE users SET 
         is_deleted = 1, 

@@ -1,9 +1,9 @@
 export type MovementType = 'IN' | 'OUT' | 'ADJUSTMENT';
 
 export interface StockMovement {
-  id: string;
-  item_id: string;
-  transaction_id: string | null;
+  id: number;
+  item_id: number;
+  transaction_id: number | null;
   movement_type: MovementType;
   quantity: number;
   stock_before: number;

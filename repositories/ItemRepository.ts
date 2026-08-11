@@ -1,6 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import type { CreateItemInput, Item, UpdateItemInput } from '../models/Item';
-import { generateId } from '../utils/generateId';
 import { toSQLiteDateTime } from '../utils/dateUtils';
 
 export class ItemRepository {
@@ -12,7 +11,7 @@ export class ItemRepository {
     );
   }
 
-  async findById(id: string): Promise<Item | null> {
+  async findById(id: number): Promise<Item | null> {
     return this.db.getFirstAsync<Item>(
       'SELECT * FROM items WHERE id = ? AND is_deleted = 0',
       [id]
@@ -47,13 +46,11 @@ export class ItemRepository {
     );
   }
 
-  async create(input: CreateItemInput): Promise<string> {
-    const id = generateId('ITM');
-    await this.db.runAsync(
-      `INSERT INTO items (id, code, barcode, name, category, purchase_price, selling_price, stock, minimum_stock, unit, photo, description, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  async create(input: CreateItemInput): Promise<number> {
+    const result = await this.db.runAsync(
+      `INSERT INTO items (code, barcode, name, category, purchase_price, selling_price, stock, minimum_stock, unit, photo, description, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        id,
         input.code ?? null,
         input.barcode ?? null,
         input.name,
@@ -68,10 +65,10 @@ export class ItemRepository {
         input.created_by ?? null,
       ]
     );
-    return id;
+    return result.lastInsertRowId;
   }
 
-  async update(id: string, input: UpdateItemInput): Promise<void> {
+  async update(id: number, input: UpdateItemInput): Promise<void> {
     const updates: string[] = [];
     const values: any[] = [];
 
@@ -105,14 +102,14 @@ export class ItemRepository {
     );
   }
 
-  async updateStock(id: string, newStock: number): Promise<void> {
+  async updateStock(id: number, newStock: number): Promise<void> {
     await this.db.runAsync(
       'UPDATE items SET stock = ?, updated_at = ? WHERE id = ?',
       [newStock, toSQLiteDateTime(), id]
     );
   }
 
-  async softDelete(id: string, deletedBy?: string): Promise<void> {
+  async softDelete(id: number, deletedBy?: number): Promise<void> {
     await this.db.runAsync(
       `UPDATE items SET 
         is_deleted = 1, 

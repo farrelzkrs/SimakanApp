@@ -1,5 +1,5 @@
 export interface Item {
-  id: string;
+  id: number;
   code: string | null;
   barcode: string | null;
   name: string;
@@ -13,9 +13,9 @@ export interface Item {
   description: string | null;
   is_active: boolean;
   created_at: string;
-  created_by: string | null;
+  created_by: number | null;
   updated_at: string | null;
-  updated_by: string | null;
+  updated_by: number | null;
   deleted_at: string | null;
   is_deleted: boolean;
 }
@@ -31,7 +31,7 @@ export type CreateItemInput = Pick<Item, 'name'> & {
   unit?: string;
   photo?: string;
   description?: string;
-  created_by?: string;
+  created_by?: number;
 };
 
 export type UpdateItemInput = Partial<Pick<
@@ -39,5 +39,5 @@ export type UpdateItemInput = Partial<Pick<
   'code' | 'barcode' | 'name' | 'category' | 'purchase_price' | 'selling_price' |
   'minimum_stock' | 'unit' | 'photo' | 'description' | 'is_active'
 >> & {
-  updated_by?: string;
+  updated_by?: number;
 };

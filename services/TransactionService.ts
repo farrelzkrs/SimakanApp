@@ -18,13 +18,13 @@ export class TransactionService {
     this.stockMovementRepo = new StockMovementRepository(db);
   }
 
-  async createTransaction(input: CreateTransactionInput): Promise<string> {
-    let transactionId = '';
+  async createTransaction(input: CreateTransactionInput): Promise<number> {
+    let transactionId = 0;
 
     await this.db.withTransactionAsync(async () => {
       transactionId = await this.transactionRepo.create(input);
 
-      const cashId = input.cash_id ?? 'CSH-utama';
+      const cashId = input.cash_id ?? 1;
       if (input.transaction_type === 'IN') {
         await this.cashRepo.addIncome(cashId, input.nominal);
       } else {
@@ -66,7 +66,7 @@ export class TransactionService {
     return transactionId;
   }
 
-  async deleteTransaction(transactionId: string, deletedBy?: string): Promise<void> {
+  async deleteTransaction(transactionId: number, deletedBy?: number): Promise<void> {
     await this.db.withTransactionAsync(async () => {
       const transaction = await this.transactionRepo.findById(transactionId);
       if (!transaction) {
@@ -121,7 +121,7 @@ export class TransactionService {
     return this.transactionRepo.findByDateRange(startDate, endDate);
   }
 
-  async getTransactionDetail(id: string): Promise<TransactionWithCategory | null> {
+  async getTransactionDetail(id: number): Promise<TransactionWithCategory | null> {
     return this.transactionRepo.findById(id);
   }
 }
