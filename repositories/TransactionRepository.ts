@@ -96,6 +96,37 @@ export class TransactionRepository {
     return id;
   }
 
+  async update(id: string, input: Partial<CreateTransactionInput> & { updated_by?: string }): Promise<void> {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (input.transaction_type !== undefined) { updates.push('transaction_type = ?'); values.push(input.transaction_type); }
+    if (input.category_id !== undefined) { updates.push('category_id = ?'); values.push(input.category_id); }
+    if (input.item_id !== undefined) { updates.push('item_id = ?'); values.push(input.item_id); }
+    if (input.quantity !== undefined) { updates.push('quantity = ?'); values.push(input.quantity); }
+    if (input.unit_price !== undefined) { updates.push('unit_price = ?'); values.push(input.unit_price); }
+    if (input.nominal !== undefined) { updates.push('nominal = ?'); values.push(input.nominal); }
+    if (input.payment_method !== undefined) { updates.push('payment_method = ?'); values.push(input.payment_method); }
+    if (input.description !== undefined) { updates.push('description = ?'); values.push(input.description); }
+
+    if (updates.length === 0) return;
+
+    updates.push('updated_at = ?');
+    values.push(toSQLiteDateTime());
+
+    if (input.updated_by) {
+      updates.push('updated_by = ?');
+      values.push(input.updated_by);
+    }
+
+    values.push(id);
+
+    await this.db.runAsync(
+      `UPDATE transactions SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+  }
+
   async softDelete(id: string, deletedBy?: string): Promise<void> {
     await this.db.runAsync(
       `UPDATE transactions SET 

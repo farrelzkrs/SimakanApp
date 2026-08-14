@@ -1,5 +1,5 @@
 export type TransactionType = 'IN' | 'OUT';
-export type PaymentMethod = 'Cash' | 'Transfer' | 'QRIS';
+export type PaymentMethod = 'Cash' | 'Lunas' | 'Transfer' | 'QRIS' | 'Hutang';
 
 export interface Transaction {
   id: string;
