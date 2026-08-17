@@ -25,10 +25,12 @@ export class TransactionService {
       transactionId = await this.transactionRepo.create(input);
 
       const cashId = input.cash_id ?? 1;
+      const cashExists = await this.cashRepo.findById(cashId);
+      const targetCashId = cashExists ? cashId : ((await this.cashRepo.findMain())?.id ?? 1);
       if (input.transaction_type === 'IN') {
-        await this.cashRepo.addIncome(cashId, input.nominal);
+        await this.cashRepo.addIncome(targetCashId, input.nominal);
       } else {
-        await this.cashRepo.addExpense(cashId, input.nominal);
+        await this.cashRepo.addExpense(targetCashId, input.nominal);
       }
 
       if (input.item_id && input.quantity && input.quantity > 0) {

@@ -63,6 +63,83 @@ export class TransactionRepository {
   }
 
   async create(input: CreateTransactionInput): Promise<number> {
+    // 1. Resolve Category ID
+    let validCategoryId: number = 0;
+    if (typeof input.category_id === 'number' && input.category_id > 0) {
+      const catCheck = await this.db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM categories WHERE id = ? AND is_deleted = 0',
+        [input.category_id]
+      );
+      if (catCheck) {
+        validCategoryId = catCheck.id;
+      }
+    }
+
+    if (validCategoryId === 0) {
+      const fallbackCat = await this.db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM categories WHERE transaction_type = ? AND is_deleted = 0 LIMIT 1',
+        [input.transaction_type]
+      );
+      if (fallbackCat) {
+        validCategoryId = fallbackCat.id;
+      } else {
+        const insertCat = await this.db.runAsync(
+          `INSERT INTO categories (code, name, transaction_type, icon, color) VALUES (?, ?, ?, ?, ?)`,
+          [
+            input.transaction_type === 'IN' ? 'CAT-IN-DEF' : 'CAT-OUT-DEF',
+            input.transaction_type === 'IN' ? 'Penjualan' : 'Pengeluaran',
+            input.transaction_type,
+            input.transaction_type === 'IN' ? 'cart' : 'shopping-bag',
+            input.transaction_type === 'IN' ? '#22C55E' : '#F97316',
+          ]
+        );
+        validCategoryId = insertCat.lastInsertRowId;
+      }
+    }
+
+    // 2. Resolve Cash ID
+    let validCashId: number = typeof input.cash_id === 'number' && input.cash_id > 0 ? input.cash_id : 1;
+    const cashCheck = await this.db.getFirstAsync<{ id: number }>(
+      'SELECT id FROM cash WHERE id = ?',
+      [validCashId]
+    );
+    if (!cashCheck) {
+      const firstCash = await this.db.getFirstAsync<{ id: number }>('SELECT id FROM cash LIMIT 1');
+      if (firstCash) {
+        validCashId = firstCash.id;
+      } else {
+        const insertCash = await this.db.runAsync(
+          `INSERT INTO cash (cash_name, opening_balance, current_balance, total_income, total_expense) VALUES (?, ?, ?, ?, ?)`,
+          ['Kas Utama', 0, 0, 0, 0]
+        );
+        validCashId = insertCash.lastInsertRowId;
+      }
+    }
+
+    // 3. Resolve Item ID (Must be null if not a valid existing item)
+    let validItemId: number | null = null;
+    if (input.item_id && typeof input.item_id === 'number' && input.item_id > 0) {
+      const itemCheck = await this.db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM items WHERE id = ? AND is_deleted = 0',
+        [input.item_id]
+      );
+      if (itemCheck) {
+        validItemId = itemCheck.id;
+      }
+    }
+
+    // 4. Resolve Created By (Must be null if not a valid existing user)
+    let validCreatedBy: number | null = null;
+    if (input.created_by && typeof input.created_by === 'number' && input.created_by > 0) {
+      const userCheck = await this.db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM users WHERE id = ? AND is_deleted = 0',
+        [input.created_by]
+      );
+      if (userCheck) {
+        validCreatedBy = userCheck.id;
+      }
+    }
+
     const transactionNo = await this.generateTransactionNo(input.transaction_type);
 
     const result = await this.db.runAsync(
@@ -76,9 +153,9 @@ export class TransactionRepository {
         transactionNo,
         input.transaction_date,
         input.transaction_type,
-        input.category_id,
-        input.cash_id ?? 1,
-        input.item_id ?? null,
+        validCategoryId,
+        validCashId,
+        validItemId,
         input.quantity ?? 0,
         input.unit_price ?? 0,
         input.nominal,
@@ -86,7 +163,7 @@ export class TransactionRepository {
         input.reference_number ?? null,
         input.attachment ?? null,
         input.description ?? null,
-        input.created_by ?? null,
+        validCreatedBy,
       ]
     );
 

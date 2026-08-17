@@ -9,6 +9,8 @@ export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
 
   if (currentVersion < 1) {
     await migrateV1(db);
+  } else {
+    await seedDefaultData(db);
   }
 }
 
