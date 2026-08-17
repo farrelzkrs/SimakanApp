@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,22 +7,59 @@ import {
   Dimensions,
   SafeAreaView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const ONBOARDING_KEY = '@simakan_has_onboarded';
 
 // SVG Wave data URI representing the exact organic swoop curve between top teal header and white bottom section
 const WAVE_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzUgMTIwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48cGF0aCBkPSJNMCwwIEwzNzUsMCBMMzc1LDE1IEMyODAsOTAgMTQwLDEyNSAwLDYwIFoiIGZpbGw9IiMxNEEzOUYiLz48L3N2Zz4=`;
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
-  const handleGetStarted = () => {
-    router.push('/dashboard');
+  useEffect(() => {
+    async function checkFirstLaunch() {
+      try {
+        const hasOnboarded = await AsyncStorage.getItem(ONBOARDING_KEY);
+        if (hasOnboarded === 'true') {
+          // Already onboarded -> jump straight to Dashboard
+          router.replace('/dashboard');
+          return;
+        }
+      } catch (err) {
+        console.log('Error checking onboarding status:', err);
+      } finally {
+        setCheckingOnboarding(false);
+      }
+    }
+    checkFirstLaunch();
+  }, [router]);
+
+  const handleGetStarted = async () => {
+    try {
+      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    } catch (err) {
+      console.log('Error saving onboarding flag:', err);
+    }
+    router.replace('/dashboard');
   };
+
+  if (checkingOnboarding) {
+    return (
+      <View style={[styles.container, { backgroundColor: '#14A39F', justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar style="light" />
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
