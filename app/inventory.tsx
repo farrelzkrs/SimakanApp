@@ -147,13 +147,6 @@ export default function InventoryScreen() {
           {/* Header Title Bar */}
           <View style={styles.headerTopBar}>
             <View style={styles.headerTitleLeft}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.backBtn}
-                onPress={() => router.back()}
-              >
-                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
               <View style={styles.headerTitleMeta}>
                 <Text style={styles.headerTitleText}>Inventori Barang</Text>
                 <Text style={styles.headerSubtitleText}>Pendaftaran & Stok Barang</Text>

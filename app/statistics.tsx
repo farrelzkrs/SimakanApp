@@ -164,15 +164,7 @@ export default function StatisticsScreen() {
       <View style={styles.topHeaderBackground}>
         <SafeAreaView style={styles.headerSafeArea}>
           <View style={styles.headerRow}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.backButton}
-              onPress={() => router.replace('/dashboard')}
-            >
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            <View style={styles.headerCenter}>
+            <View style={styles.headerTitleContainer}>
               <Text style={styles.headerTitle}>Daftar Hutang</Text>
               <Text style={styles.headerSubtitle}>Catatan Piutang Pelanggan & Hutang Toko</Text>
             </View>
@@ -595,21 +587,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
+  headerTitleContainer: {
     flex: 1,
-    alignItems: 'center',
-    marginHorizontal: 10,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.2,
