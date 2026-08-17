@@ -590,7 +590,7 @@ export default function InventoryScreen() {
           style={styles.navItem}
           onPress={() => router.push('/dashboard')}
         >
-          <Ionicons name="home-outline" size={24} color="#94A3B8" />
+          <Ionicons name="home-outline" size={26} color="#94A3B8" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -602,11 +602,7 @@ export default function InventoryScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7} style={styles.navItem}>
-          <Ionicons name="card" size={24} color="#14A39F" />
-        </TouchableOpacity>
-
-        <TouchableOpacity activeOpacity={0.7} style={styles.navItem}>
-          <Ionicons name="person-outline" size={24} color="#94A3B8" />
+          <Ionicons name="card" size={26} color="#14A39F" />
         </TouchableOpacity>
       </View>
     </View>
