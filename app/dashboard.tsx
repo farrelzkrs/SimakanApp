@@ -577,7 +577,7 @@ export default function DashboardScreen() {
           style={styles.navItem}
           onPress={() => {
             setActiveNav('chart');
-            router.push('/statistics');
+            router.replace('/statistics');
           }}
         >
           <Ionicons
@@ -592,7 +592,7 @@ export default function DashboardScreen() {
           style={styles.navItem}
           onPress={() => {
             setActiveNav('wallet');
-            router.push('/inventory');
+            router.replace('/inventory');
           }}
         >
           <Ionicons

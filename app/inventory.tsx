@@ -588,7 +588,7 @@ export default function InventoryScreen() {
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.navItem}
-          onPress={() => router.push('/dashboard')}
+          onPress={() => router.replace('/dashboard')}
         >
           <Ionicons name="home-outline" size={26} color="#94A3B8" />
         </TouchableOpacity>
@@ -596,7 +596,7 @@ export default function InventoryScreen() {
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.navItem}
-          onPress={() => router.push('/statistics')}
+          onPress={() => router.replace('/statistics')}
         >
           <Ionicons name="stats-chart-outline" size={24} color="#94A3B8" />
         </TouchableOpacity>

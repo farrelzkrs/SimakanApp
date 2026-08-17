@@ -18,15 +18,47 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <InventoryProvider>
         <TransactionProvider>
-          <Stack>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="dashboard" options={{ headerShown: false }} />
-            <Stack.Screen name="statistics" options={{ headerShown: false }} />
-            <Stack.Screen name="inventory" options={{ headerShown: false }} />
-            <Stack.Screen name="rekap-pengeluaran" options={{ headerShown: false }} />
-            <Stack.Screen name="rekap-pemasukan" options={{ headerShown: false }} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+              animationDuration: 240,
+              gestureEnabled: true,
+              fullScreenGestureEnabled: true,
+            }}
+          >
+            <Stack.Screen name="index" options={{ headerShown: false, animation: 'fade' }} />
+            <Stack.Screen name="dashboard" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
+            <Stack.Screen name="statistics" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
+            <Stack.Screen name="inventory" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
+            <Stack.Screen
+              name="rekap-pengeluaran"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                animationDuration: 240,
+                gestureEnabled: true,
+              }}
+            />
+            <Stack.Screen
+              name="rekap-pemasukan"
+              options={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                animationDuration: 240,
+                gestureEnabled: true,
+              }}
+            />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen
+              name="modal"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+                animationDuration: 260,
+                title: 'Modal',
+              }}
+            />
           </Stack>
           <StatusBar style="light" />
         </TransactionProvider>

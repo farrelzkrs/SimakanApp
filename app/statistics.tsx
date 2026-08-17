@@ -247,7 +247,7 @@ export default function StatisticsScreen() {
           style={styles.navItem}
           onPress={() => {
             setActiveNav('home');
-            router.push('/dashboard');
+            router.replace('/dashboard');
           }}
         >
           <Ionicons
@@ -274,7 +274,7 @@ export default function StatisticsScreen() {
           style={styles.navItem}
           onPress={() => {
             setActiveNav('wallet');
-            router.push('/inventory');
+            router.replace('/inventory');
           }}
         >
           <Ionicons
