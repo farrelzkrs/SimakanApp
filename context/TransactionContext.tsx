@@ -11,7 +11,10 @@ export interface TransactionItem {
   total: number;
   paymentMethod: 'Lunas' | 'Hutang';
   transactionType: 'IN' | 'OUT';
-  dayId: string; // e.g. "day-sat", "day-wed", "week-2", "m-8"
+  monthKey: string; // e.g. "2026-08"
+  weekKey: string;  // e.g. "W1", "W2", "W3", "W4", "W5"
+  dateKey: string;  // e.g. "2026-08-15"
+  dayId: string;    // e.g. "day-sat", "day-wed"
   fullDateText: string;
   timeText: string;
   timestamp: number;
@@ -19,14 +22,15 @@ export interface TransactionItem {
 
 interface TransactionContextType {
   transactions: TransactionItem[];
-  addTransaction: (data: OrderFormData, targetDayId?: string) => void;
+  addTransaction: (data: OrderFormData, targetDayId?: string, customDate?: Date) => void;
   deleteTransaction: (id: string) => void;
   getTransactionsByDay: (dayId: string, type?: 'IN' | 'OUT') => TransactionItem[];
   getTotalByType: (type: 'IN' | 'OUT', dayId?: string) => number;
 }
 
 const INITIAL_TRANSACTIONS: TransactionItem[] = [
-  // Income Items for Saturday 15 Aug (day-sat)
+  // --- AGUSTUS 2026: MINGGU KE-3 (15 - 21 Ags) ---
+  // Sabtu, 15 Agustus 2026 (Pemasukan)
   {
     id: 'trx-inc-1',
     name: 'Kopi Susu Aren Special',
@@ -37,10 +41,13 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 330000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
     dayId: 'day-sat',
     fullDateText: 'Sabtu, 15 Agustus 2026',
     timeText: '14:20 WIB',
-    timestamp: Date.now() - 3600000,
+    timestamp: new Date('2026-08-15T14:20:00').getTime(),
   },
   {
     id: 'trx-inc-2',
@@ -52,15 +59,36 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 200000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
     dayId: 'day-sat',
     fullDateText: 'Sabtu, 15 Agustus 2026',
     timeText: '15:10 WIB',
-    timestamp: Date.now() - 1800000,
+    timestamp: new Date('2026-08-15T15:10:00').getTime(),
   },
-  // Expense Items for Saturday 15 Aug (day-sat)
+  {
+    id: 'trx-inc-7',
+    name: 'Croissant Butter Warm',
+    category: 'Snack',
+    quantity: 12,
+    unit: 'Pcs',
+    price: 18000,
+    total: 216000,
+    paymentMethod: 'Lunas',
+    transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
+    dayId: 'day-sat',
+    fullDateText: 'Sabtu, 15 Agustus 2026',
+    timeText: '16:45 WIB',
+    timestamp: new Date('2026-08-15T16:45:00').getTime(),
+  },
+  // Sabtu, 15 Agustus 2026 (Pengeluaran)
   {
     id: 'trx-exp-1',
-    name: 'Biji Kopi Arabika 1kg',
+    name: 'Biji Kopi Arabika Gayo 1kg',
     category: 'Bahan Baku',
     quantity: 2,
     unit: 'Kg',
@@ -68,10 +96,13 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 250000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
     dayId: 'day-sat',
     fullDateText: 'Sabtu, 15 Agustus 2026',
     timeText: '09:30 WIB',
-    timestamp: Date.now() - 10000000,
+    timestamp: new Date('2026-08-15T09:30:00').getTime(),
   },
   {
     id: 'trx-exp-2',
@@ -83,12 +114,55 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 180000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
     dayId: 'day-sat',
     fullDateText: 'Sabtu, 15 Agustus 2026',
     timeText: '10:00 WIB',
-    timestamp: Date.now() - 9000000,
+    timestamp: new Date('2026-08-15T10:00:00').getTime(),
   },
-  // Items for Wednesday 12 Aug (day-wed)
+
+  // Jumat, 14 Agustus 2026 (W2/W3 border)
+  {
+    id: 'trx-inc-8',
+    name: 'Matcha Latte Ice',
+    category: 'Minuman',
+    quantity: 14,
+    unit: 'Cup',
+    price: 24000,
+    total: 336000,
+    paymentMethod: 'Lunas',
+    transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-14',
+    dayId: 'day-fri',
+    fullDateText: 'Jumat, 14 Agustus 2026',
+    timeText: '13:15 WIB',
+    timestamp: new Date('2026-08-14T13:15:00').getTime(),
+  },
+  {
+    id: 'trx-exp-4',
+    name: 'Sirup Karamel 750ml',
+    category: 'Bahan Baku',
+    quantity: 3,
+    unit: 'Botol',
+    price: 65000,
+    total: 195000,
+    paymentMethod: 'Lunas',
+    transactionType: 'OUT',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-14',
+    dayId: 'day-fri',
+    fullDateText: 'Jumat, 14 Agustus 2026',
+    timeText: '11:20 WIB',
+    timestamp: new Date('2026-08-14T11:20:00').getTime(),
+  },
+
+  // --- AGUSTUS 2026: MINGGU KE-2 (08 - 14 Ags) ---
+  // Rabu, 12 Agustus 2026
   {
     id: 'trx-inc-3',
     name: 'Espresso Double Shot',
@@ -99,10 +173,31 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 180000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-12',
     dayId: 'day-wed',
     fullDateText: 'Rabu, 12 Agustus 2026',
     timeText: '11:00 WIB',
-    timestamp: Date.now() - 86400000 * 3,
+    timestamp: new Date('2026-08-12T11:00:00').getTime(),
+  },
+  {
+    id: 'trx-inc-4',
+    name: 'Nasi Goreng Spesial Telur',
+    category: 'Makanan',
+    quantity: 6,
+    unit: 'Porsi',
+    price: 28000,
+    total: 168000,
+    paymentMethod: 'Lunas',
+    transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-12',
+    dayId: 'day-wed',
+    fullDateText: 'Rabu, 12 Agustus 2026',
+    timeText: '12:30 WIB',
+    timestamp: new Date('2026-08-12T12:30:00').getTime(),
   },
   {
     id: 'trx-exp-3',
@@ -114,10 +209,128 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 175000,
     paymentMethod: 'Hutang',
     transactionType: 'OUT',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-12',
     dayId: 'day-wed',
     fullDateText: 'Rabu, 12 Agustus 2026',
     timeText: '13:45 WIB',
-    timestamp: Date.now() - 86400000 * 3,
+    timestamp: new Date('2026-08-12T13:45:00').getTime(),
+  },
+
+  // Senin, 10 Agustus 2026
+  {
+    id: 'trx-inc-5',
+    name: 'Caramel Macchiato Large',
+    category: 'Minuman',
+    quantity: 8,
+    unit: 'Cup',
+    price: 26000,
+    total: 208000,
+    paymentMethod: 'Lunas',
+    transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-10',
+    dayId: 'day-mon',
+    fullDateText: 'Senin, 10 Agustus 2026',
+    timeText: '10:15 WIB',
+    timestamp: new Date('2026-08-10T10:15:00').getTime(),
+  },
+  {
+    id: 'trx-exp-5',
+    name: 'Gas Elpiji 12kg',
+    category: 'Operasional',
+    quantity: 1,
+    unit: 'Tabung',
+    price: 215000,
+    total: 215000,
+    paymentMethod: 'Lunas',
+    transactionType: 'OUT',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-10',
+    dayId: 'day-mon',
+    fullDateText: 'Senin, 10 Agustus 2026',
+    timeText: '08:45 WIB',
+    timestamp: new Date('2026-08-10T08:45:00').getTime(),
+  },
+
+  // --- AGUSTUS 2026: MINGGU KE-1 (01 - 07 Ags) ---
+  // Selasa, 04 Agustus 2026
+  {
+    id: 'trx-inc-6',
+    name: 'Americano Ice Segar',
+    category: 'Minuman',
+    quantity: 12,
+    unit: 'Cup',
+    price: 16000,
+    total: 192000,
+    paymentMethod: 'Lunas',
+    transactionType: 'IN',
+    monthKey: '2026-08',
+    weekKey: 'W1',
+    dateKey: '2026-08-04',
+    dayId: 'day-tue',
+    fullDateText: 'Selasa, 04 Agustus 2026',
+    timeText: '09:40 WIB',
+    timestamp: new Date('2026-08-04T09:40:00').getTime(),
+  },
+  {
+    id: 'trx-exp-6',
+    name: 'Sedotan Steril & Tissue Paper',
+    category: 'Kemasan',
+    quantity: 4,
+    unit: 'Pack',
+    price: 25000,
+    total: 100000,
+    paymentMethod: 'Lunas',
+    transactionType: 'OUT',
+    monthKey: '2026-08',
+    weekKey: 'W1',
+    dateKey: '2026-08-04',
+    dayId: 'day-tue',
+    fullDateText: 'Selasa, 04 Agustus 2026',
+    timeText: '11:00 WIB',
+    timestamp: new Date('2026-08-04T11:00:00').getTime(),
+  },
+
+  // --- JULI 2026 SAMPLE DATA ---
+  {
+    id: 'trx-inc-jul-1',
+    name: 'Ice Lemon Tea Jumbo',
+    category: 'Minuman',
+    quantity: 20,
+    unit: 'Cup',
+    price: 15000,
+    total: 300000,
+    paymentMethod: 'Lunas',
+    transactionType: 'IN',
+    monthKey: '2026-07',
+    weekKey: 'W4',
+    dateKey: '2026-07-25',
+    dayId: 'day-sat',
+    fullDateText: 'Sabtu, 25 Juli 2026',
+    timeText: '15:30 WIB',
+    timestamp: new Date('2026-07-25T15:30:00').getTime(),
+  },
+  {
+    id: 'trx-exp-jul-1',
+    name: 'Listrik & Token PLN Juli',
+    category: 'Operasional',
+    quantity: 1,
+    unit: 'Bulan',
+    price: 350000,
+    total: 350000,
+    paymentMethod: 'Lunas',
+    transactionType: 'OUT',
+    monthKey: '2026-07',
+    weekKey: 'W4',
+    dateKey: '2026-07-25',
+    dayId: 'day-sat',
+    fullDateText: 'Sabtu, 25 Juli 2026',
+    timeText: '10:00 WIB',
+    timestamp: new Date('2026-07-25T10:00:00').getTime(),
   },
 ];
 
@@ -126,15 +339,35 @@ const TransactionContext = createContext<TransactionContextType | undefined>(und
 export function TransactionProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
 
-  const addTransaction = (data: OrderFormData, targetDayId?: string) => {
+  const addTransaction = (data: OrderFormData, targetDayId?: string, customDate?: Date) => {
     const qty = data.quantity || 1;
     const price = data.price || 0;
     const total = qty * price;
-    const assignedDayId = targetDayId || 'day-sat'; // Default to today/newest day (Sabtu, 15 Agustus 2026)
+    const assignedDayId = targetDayId || 'day-sat';
 
-    const now = new Date();
+    const now = customDate || new Date();
     const timeText = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
-    const fullDateText = 'Sabtu, 15 Agustus 2026';
+    
+    // Format full date text
+    const fullDateText = now.toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const monthKey = `${yyyy}-${mm}`;
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+
+    const dateNum = now.getDate();
+    let weekKey = 'W1';
+    if (dateNum > 28) weekKey = 'W5';
+    else if (dateNum > 21) weekKey = 'W4';
+    else if (dateNum > 14) weekKey = 'W3';
+    else if (dateNum > 7) weekKey = 'W2';
 
     const newTrx: TransactionItem = {
       id: 'trx-' + Date.now(),
@@ -146,10 +379,13 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       total: total,
       paymentMethod: data.paymentMethod || 'Lunas',
       transactionType: data.transactionType || 'IN',
+      monthKey,
+      weekKey,
+      dateKey,
       dayId: assignedDayId,
-      fullDateText: fullDateText,
-      timeText: timeText,
-      timestamp: Date.now(),
+      fullDateText,
+      timeText,
+      timestamp: now.getTime(),
     };
 
     setTransactions((prev) => [newTrx, ...prev]);
@@ -195,3 +431,4 @@ export function useTransactions() {
   }
   return context;
 }
+

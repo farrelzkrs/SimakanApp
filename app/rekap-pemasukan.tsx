@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Dimensions,
   Modal,
   TouchableWithoutFeedback,
+  Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,48 +21,27 @@ import { useTransactions, TransactionItem } from '@/context/TransactionContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-interface CalendarCardItem {
-  id: string;
-  dayName: string;
-  dayNumber: string;
-  fullDateText: string;
-  isRedHeader?: boolean;
-}
-
-// 1. DATASET PERIODE: HARI (Urut dari Terbaru: Sabtu s/d Minggu. Hanya Minggu yang Merah)
-const MOCK_DAYS_HARI: CalendarCardItem[] = [
-  { id: 'day-sat', dayName: 'SAB', dayNumber: '15', fullDateText: 'Sabtu, 15 Agustus 2026', isRedHeader: false },
-  { id: 'day-fri', dayName: 'JUM', dayNumber: '14', fullDateText: 'Jumat, 14 Agustus 2026', isRedHeader: false },
-  { id: 'day-thu', dayName: 'KAM', dayNumber: '13', fullDateText: 'Kamis, 13 Agustus 2026', isRedHeader: false },
-  { id: 'day-wed', dayName: 'RAB', dayNumber: '12', fullDateText: 'Rabu, 12 Agustus 2026', isRedHeader: false },
-  { id: 'day-tue', dayName: 'SEL', dayNumber: '11', fullDateText: 'Selasa, 11 Agustus 2026', isRedHeader: false },
-  { id: 'day-mon', dayName: 'SEN', dayNumber: '10', fullDateText: 'Senin, 10 Agustus 2026', isRedHeader: false },
-  { id: 'day-sun', dayName: 'MIN', dayNumber: '09', fullDateText: 'Minggu, 09 Agustus 2026', isRedHeader: true },
+// 1. DATA MASTER BULAN
+const MONTH_OPTIONS = [
+  { id: '2026-08', label: 'Agustus 2026', shortLabel: 'Agustus' },
+  { id: '2026-07', label: 'Juli 2026', shortLabel: 'Juli' },
+  { id: '2026-06', label: 'Juni 2026', shortLabel: 'Juni' },
+  { id: '2026-05', label: 'Mei 2026', shortLabel: 'Mei' },
+  { id: '2026-04', label: 'April 2026', shortLabel: 'April' },
+  { id: '2026-03', label: 'Maret 2026', shortLabel: 'Maret' },
+  { id: '2026-02', label: 'Februari 2026', shortLabel: 'Februari' },
+  { id: '2026-01', label: 'Januari 2026', shortLabel: 'Januari' },
+  { id: 'ALL', label: 'Semua Bulan (2026)', shortLabel: 'Semua' },
 ];
 
-// 2. DATASET PERIODE: MINGGU (Terbaru: Minggu ke-5 s/d ke-1)
-const MOCK_WEEKS_MINGGU: CalendarCardItem[] = [
-  { id: 'week-5', dayName: 'KE-5', dayNumber: 'M-5', fullDateText: 'Minggu Ke-5 (29 - 31 Agustus 2026)', isRedHeader: false },
-  { id: 'week-4', dayName: 'KE-4', dayNumber: 'M-4', fullDateText: 'Minggu Ke-4 (22 - 28 Agustus 2026)', isRedHeader: false },
-  { id: 'week-3', dayName: 'KE-3', dayNumber: 'M-3', fullDateText: 'Minggu Ke-3 (15 - 21 Agustus 2026)', isRedHeader: false },
-  { id: 'week-2', dayName: 'KE-2', dayNumber: 'M-2', fullDateText: 'Minggu Ke-2 (08 - 14 Agustus 2026)', isRedHeader: false },
-  { id: 'week-1', dayName: 'KE-1', dayNumber: 'M-1', fullDateText: 'Minggu Ke-1 (01 - 07 Agustus 2026)', isRedHeader: false },
-];
-
-// 3. DATASET PERIODE: BULAN (Terbaru: Desember s/d Januari)
-const MOCK_MONTHS_BULAN: CalendarCardItem[] = [
-  { id: 'm-12', dayName: 'DES', dayNumber: '12', fullDateText: 'Bulan Desember 2026', isRedHeader: false },
-  { id: 'm-11', dayName: 'NOV', dayNumber: '11', fullDateText: 'Bulan November 2026', isRedHeader: false },
-  { id: 'm-10', dayName: 'OKT', dayNumber: '10', fullDateText: 'Bulan Oktober 2026', isRedHeader: false },
-  { id: 'm-9', dayName: 'SEP', dayNumber: '09', fullDateText: 'Bulan September 2026', isRedHeader: false },
-  { id: 'm-8', dayName: 'AGU', dayNumber: '08', fullDateText: 'Bulan Agustus 2026', isRedHeader: false },
-  { id: 'm-7', dayName: 'JUL', dayNumber: '07', fullDateText: 'Bulan Juli 2026', isRedHeader: false },
-  { id: 'm-6', dayName: 'JUN', dayNumber: '06', fullDateText: 'Bulan Juni 2026', isRedHeader: false },
-  { id: 'm-5', dayName: 'MEI', dayNumber: '05', fullDateText: 'Bulan Mei 2026', isRedHeader: false },
-  { id: 'm-4', dayName: 'APR', dayNumber: '04', fullDateText: 'Bulan April 2026', isRedHeader: false },
-  { id: 'm-3', dayName: 'MAR', dayNumber: '03', fullDateText: 'Bulan Maret 2026', isRedHeader: false },
-  { id: 'm-2', dayName: 'FEB', dayNumber: '02', fullDateText: 'Bulan Februari 2026', isRedHeader: false },
-  { id: 'm-1', dayName: 'JAN', dayNumber: '01', fullDateText: 'Bulan Januari 2026', isRedHeader: false },
+// 2. DATA MASTER MINGGU
+const WEEK_OPTIONS = [
+  { id: 'ALL', label: 'Semua Minggu', shortLabel: 'Semua' },
+  { id: 'W1', label: 'Minggu Ke-1 (01 - 07)', shortLabel: 'Minggu 1' },
+  { id: 'W2', label: 'Minggu Ke-2 (08 - 14)', shortLabel: 'Minggu 2' },
+  { id: 'W3', label: 'Minggu Ke-3 (15 - 21)', shortLabel: 'Minggu 3' },
+  { id: 'W4', label: 'Minggu Ke-4 (22 - 28)', shortLabel: 'Minggu 4' },
+  { id: 'W5', label: 'Minggu Ke-5 (29 - 31)', shortLabel: 'Minggu 5' },
 ];
 
 export default function RekapPemasukanScreen() {
@@ -69,60 +49,141 @@ export default function RekapPemasukanScreen() {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
-  const { transactions, addTransaction } = useTransactions();
+  const { transactions, addTransaction, deleteTransaction } = useTransactions();
 
-  const [activePeriod, setActivePeriod] = useState<'Hari' | 'Minggu' | 'Bulan'>('Hari');
-  const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
-  const [selectedDayId, setSelectedDayId] = useState<string>('day-sat');
+  // Cascading Filter States
+  const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
+  const [selectedWeek, setSelectedWeek] = useState<string>('ALL');
+  const [selectedDate, setSelectedDate] = useState<string>('ALL');
 
-  // Modals state
-  const [tableModalVisible, setTableModalVisible] = useState<boolean>(false);
+  // Active Dropdown Modal State
+  const [activeDropdownType, setActiveDropdownType] = useState<'MONTH' | 'WEEK' | 'DAY' | null>(null);
+
+  // Add Transaction Modal State
   const [orderModalVisible, setOrderModalVisible] = useState<boolean>(false);
 
-  // Dynamic active cards list based on Dropdown Period Filter
-  const activeCards =
-    activePeriod === 'Hari'
-      ? MOCK_DAYS_HARI
-      : activePeriod === 'Minggu'
-      ? MOCK_WEEKS_MINGGU
-      : MOCK_MONTHS_BULAN;
+  // Dynamic Day Options based on selected Month and Week
+  const dynamicDayOptions = useMemo(() => {
+    const options: { id: string; label: string; shortLabel: string }[] = [
+      { id: 'ALL', label: 'Semua Hari & Tanggal', shortLabel: 'Semua' },
+    ];
 
-  const selectedDay = activeCards.find((d) => d.id === selectedDayId) || activeCards[0];
+    // Find dates that exist in transactions or generate typical dates
+    const matchedDates = new Set<string>();
+    transactions.forEach((t) => {
+      if (t.transactionType === 'IN') {
+        const matchMonth = selectedMonth === 'ALL' || t.monthKey === selectedMonth;
+        const matchWeek = selectedWeek === 'ALL' || t.weekKey === selectedWeek;
+        if (matchMonth && matchWeek && t.dateKey) {
+          matchedDates.add(t.dateKey);
+        }
+      }
+    });
 
-  // Filter cashier products from central store for the selected day/week/month (Pemasukan only)
-  const filteredProducts = transactions.filter(
-    (item) => item.dayId === selectedDayId && item.transactionType === 'IN'
-  );
+    // If month is August 2026, also supply default key days for easy filtering
+    if (selectedMonth === '2026-08' || selectedMonth === 'ALL') {
+      if (selectedWeek === 'W3' || selectedWeek === 'ALL') {
+        matchedDates.add('2026-08-15');
+      }
+      if (selectedWeek === 'W2' || selectedWeek === 'ALL') {
+        matchedDates.add('2026-08-14');
+        matchedDates.add('2026-08-12');
+        matchedDates.add('2026-08-10');
+      }
+      if (selectedWeek === 'W1' || selectedWeek === 'ALL') {
+        matchedDates.add('2026-08-04');
+      }
+    }
 
-  const totalIncomeSelectedDay = filteredProducts.reduce((acc, curr) => acc + curr.total, 0);
-  const totalQtySelectedDay = filteredProducts.reduce((acc, curr) => acc + curr.quantity, 0);
+    const sortedDates = Array.from(matchedDates).sort((a, b) => b.localeCompare(a));
+    sortedDates.forEach((dStr) => {
+      const parts = dStr.split('-');
+      if (parts.length === 3) {
+        const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        const dayName = dObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
+        options.push({
+          id: dStr,
+          label: dObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+          shortLabel: dayName,
+        });
+      }
+    });
+
+    return options;
+  }, [selectedMonth, selectedWeek, transactions]);
+
+  // Filtered Transactions for Rekap Pemasukan
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((t) => {
+      if (t.transactionType !== 'IN') return false;
+      if (selectedMonth !== 'ALL' && t.monthKey !== selectedMonth) return false;
+      if (selectedWeek !== 'ALL' && t.weekKey !== selectedWeek) return false;
+      if (selectedDate !== 'ALL' && t.dateKey !== selectedDate) return false;
+      return true;
+    });
+  }, [transactions, selectedMonth, selectedWeek, selectedDate]);
+
+  // Aggregate Metrics
+  const totalAmount = useMemo(() => {
+    return filteredTransactions.reduce((acc, curr) => acc + curr.total, 0);
+  }, [filteredTransactions]);
+
+  const totalQuantity = useMemo(() => {
+    return filteredTransactions.reduce((acc, curr) => acc + curr.quantity, 0);
+  }, [filteredTransactions]);
 
   const formatRupiah = (num: number) => {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
 
-  const handlePeriodChange = (period: 'Hari' | 'Minggu' | 'Bulan') => {
-    setActivePeriod(period);
-    setDropdownOpen(false);
+  // Label Helpers
+  const selectedMonthObj = MONTH_OPTIONS.find((m) => m.id === selectedMonth) || MONTH_OPTIONS[0];
+  const selectedWeekObj = WEEK_OPTIONS.find((w) => w.id === selectedWeek) || WEEK_OPTIONS[0];
+  const selectedDayObj = dynamicDayOptions.find((d) => d.id === selectedDate) || dynamicDayOptions[0];
 
-    // Auto select first item (newest) of the new period
-    if (period === 'Hari') {
-      setSelectedDayId(MOCK_DAYS_HARI[0].id);
-    } else if (period === 'Minggu') {
-      setSelectedDayId(MOCK_WEEKS_MINGGU[0].id);
-    } else {
-      setSelectedDayId(MOCK_MONTHS_BULAN[0].id);
-    }
+  const handleSelectMonth = (monthId: string) => {
+    setSelectedMonth(monthId);
+    setSelectedWeek('ALL');
+    setSelectedDate('ALL');
+    setActiveDropdownType(null);
   };
 
-  // Click handler for calendar date card -> Opens Pop-Up Modal with Table
-  const handleCardPress = (dayId: string) => {
-    setSelectedDayId(dayId);
-    setTableModalVisible(true);
+  const handleSelectWeek = (weekId: string) => {
+    setSelectedWeek(weekId);
+    setSelectedDate('ALL');
+    setActiveDropdownType(null);
   };
 
-  const handleAddTransaction = (data: OrderFormData) => {
-    addTransaction(data, selectedDayId);
+  const handleSelectDay = (dayId: string) => {
+    setSelectedDate(dayId);
+    setActiveDropdownType(null);
+  };
+
+  const handleResetFilter = () => {
+    setSelectedMonth('2026-08');
+    setSelectedWeek('ALL');
+    setSelectedDate('ALL');
+  };
+
+  const handleDeleteItem = (id: string, name: string) => {
+    Alert.alert(
+      'Hapus Transaksi',
+      `Yakin ingin menghapus item "${name}" dari rekap?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: () => {
+            deleteTransaction(id);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSaveTransaction = (data: OrderFormData) => {
+    addTransaction(data, 'day-sat');
     setOrderModalVisible(false);
   };
 
@@ -130,7 +191,7 @@ export default function RekapPemasukanScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Top Banner Colored Background (Teal for Income) */}
+      {/* Top Banner Header (Teal for Pemasukan) */}
       <View style={styles.topHeaderBackground}>
         <SafeAreaView style={styles.headerSafeArea}>
           <View style={styles.headerRow}>
@@ -144,42 +205,51 @@ export default function RekapPemasukanScreen() {
 
             <Text style={styles.headerTitle}>Rekap Pemasukan</Text>
 
-            <TouchableOpacity activeOpacity={0.7} style={styles.iconButton}>
-              <Ionicons name="calendar-outline" size={24} color="#FFFFFF" />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.addHeaderBtn}
+              onPress={() => setOrderModalVisible(true)}
+            >
+              <Ionicons name="add-circle" size={26} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
-          {/* Dynamic Top Summary Card */}
+          {/* Dynamic Top KPI Summary Card */}
           <View style={styles.summaryCard}>
-            {/* Top Date Header Row */}
-            <View style={styles.summaryDateRow}>
-              <View style={styles.miniCalendarBox}>
-                <View style={styles.miniCalendarHeader}>
-                  <View style={styles.miniRingDot} />
-                  <View style={styles.miniRingDot} />
-                </View>
-                <View style={styles.miniCalendarBody}>
-                  <Text style={styles.miniCalendarNumber}>{selectedDay.dayNumber}</Text>
-                </View>
+            {/* Filter Breadcrumb */}
+            <View style={styles.filterBreadcrumbRow}>
+              <View style={styles.badgeIndicator}>
+                <Ionicons name="funnel" size={12} color="#14A39F" />
+                <Text style={styles.badgeIndicatorText}>Periode Aktif</Text>
               </View>
-
-              <Text style={styles.summaryDateTitle}>{selectedDay.fullDateText}</Text>
+              <Text style={styles.breadcrumbText} numberOfLines={1}>
+                {selectedMonthObj.shortLabel}
+                {selectedWeek !== 'ALL' ? ` › ${selectedWeekObj.shortLabel}` : ''}
+                {selectedDate !== 'ALL' ? ` › ${selectedDayObj.shortLabel}` : ''}
+              </Text>
             </View>
 
             <View style={styles.summaryDivider} />
 
-            {/* Income / Expense Split Metrics */}
+            {/* Metrics Triplet */}
             <View style={styles.metricsRow}>
               <View style={styles.metricColumn}>
-                <Text style={styles.metricLabel}>Total Kuantitas</Text>
-                <Text style={styles.metricQtyValue}>{totalQtySelectedDay} Barang</Text>
+                <Text style={styles.metricLabel}>Total Transaksi</Text>
+                <Text style={styles.metricValCount}>{filteredTransactions.length} Data</Text>
+              </View>
+
+              <View style={styles.verticalDivider} />
+
+              <View style={styles.metricColumn}>
+                <Text style={styles.metricLabel}>Total Qty</Text>
+                <Text style={styles.metricValQty}>{totalQuantity} Items</Text>
               </View>
 
               <View style={styles.verticalDivider} />
 
               <View style={styles.metricColumn}>
                 <Text style={styles.metricLabel}>Total Pemasukan</Text>
-                <Text style={styles.metricIncomeValue}>▲ {formatRupiah(totalIncomeSelectedDay)}</Text>
+                <Text style={styles.metricValIncome}>{formatRupiah(totalAmount)}</Text>
               </View>
             </View>
           </View>
@@ -191,236 +261,389 @@ export default function RekapPemasukanScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + bottomInset }]}
       >
-        {/* Period Filter Dropdown Selector (Hari / Minggu / Bulan) */}
-        <View style={styles.dropdownSection}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.dropdownTrigger}
-            onPress={() => setDropdownOpen((prev) => !prev)}
-          >
-            <View style={styles.dropdownTriggerLeft}>
-              <Ionicons name="funnel-outline" size={18} color="#14A39F" style={{ marginRight: 10 }} />
-              <Text style={styles.dropdownLabelPrefix}>Periode Rekap: </Text>
-              <Text style={styles.dropdownSelectedValue}>{activePeriod}</Text>
+        {/* ========================================================
+            CASCADING MULTI-DROPDOWN FILTER BAR (Bulan -> Minggu -> Hari)
+        ======================================================== */}
+        <View style={styles.filterSectionCard}>
+          <View style={styles.filterSectionHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="options-outline" size={18} color="#14A39F" style={{ marginRight: 6 }} />
+              <Text style={styles.filterSectionTitle}>Filter Rekap Bertingkat</Text>
             </View>
+            {(selectedMonth !== '2026-08' || selectedWeek !== 'ALL' || selectedDate !== 'ALL') && (
+              <TouchableOpacity activeOpacity={0.7} onPress={handleResetFilter}>
+                <Text style={styles.resetFilterText}>Reset Filter</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-            <Ionicons
-              name={dropdownOpen ? 'chevron-up' : 'chevron-down'}
-              size={18}
-              color="#64748B"
-            />
-          </TouchableOpacity>
+          {/* Cascading 3 Dropdown Row */}
+          <View style={styles.dropdownsRow}>
+            {/* 1. Dropdown BULAN */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[
+                styles.dropdownButton,
+                selectedMonth !== 'ALL' && styles.dropdownButtonActive,
+              ]}
+              onPress={() => setActiveDropdownType('MONTH')}
+            >
+              <View style={styles.dropdownBtnContent}>
+                <Text style={styles.dropdownBtnLabel}>1. Bulan</Text>
+                <Text style={styles.dropdownBtnValue} numberOfLines={1}>
+                  {selectedMonthObj.shortLabel}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={14} color="#64748B" />
+            </TouchableOpacity>
 
-          {/* Dropdown Options Popup Card */}
-          {dropdownOpen && (
-            <View style={styles.dropdownMenuCard}>
-              {(['Hari', 'Minggu', 'Bulan'] as const).map((periodOption) => {
-                const isSelected = activePeriod === periodOption;
-                return (
-                  <TouchableOpacity
-                    key={periodOption}
-                    activeOpacity={0.7}
-                    style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
-                    onPress={() => handlePeriodChange(periodOption)}
-                  >
-                    <Text
-                      style={[
-                        styles.dropdownMenuText,
-                        isSelected && styles.dropdownMenuTextActive,
-                      ]}
+            {/* 2. Dropdown MINGGU */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[
+                styles.dropdownButton,
+                selectedWeek !== 'ALL' && styles.dropdownButtonActive,
+              ]}
+              onPress={() => setActiveDropdownType('WEEK')}
+            >
+              <View style={styles.dropdownBtnContent}>
+                <Text style={styles.dropdownBtnLabel}>2. Minggu</Text>
+                <Text style={styles.dropdownBtnValue} numberOfLines={1}>
+                  {selectedWeekObj.shortLabel}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={14} color="#64748B" />
+            </TouchableOpacity>
+
+            {/* 3. Dropdown HARI & TANGGAL */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[
+                styles.dropdownButton,
+                selectedDate !== 'ALL' && styles.dropdownButtonActive,
+              ]}
+              onPress={() => setActiveDropdownType('DAY')}
+            >
+              <View style={styles.dropdownBtnContent}>
+                <Text style={styles.dropdownBtnLabel}>3. Hari</Text>
+                <Text style={styles.dropdownBtnValue} numberOfLines={1}>
+                  {selectedDayObj.shortLabel}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={14} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ========================================================
+            REKAP TABEL (Cashier / Accounting Table View)
+        ======================================================== */}
+        <View style={styles.tableCardContainer}>
+          {/* Table Card Top Bar */}
+          <View style={styles.tableCardTopBar}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="grid" size={18} color="#14A39F" style={{ marginRight: 8 }} />
+              <Text style={styles.tableCardTitle}>Tabel Rekapitulasi Pemasukan</Text>
+            </View>
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{filteredTransactions.length} Baris</Text>
+            </View>
+          </View>
+
+          {/* Horizontal Scrollable Table Wrapper */}
+          {filteredTransactions.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.horizontalScroll}>
+              <View style={styles.tableStructure}>
+                {/* Table Header Row */}
+                <View style={styles.tableHeaderRow}>
+                  <Text style={[styles.thText, { width: 44, textAlign: 'center' }]}>No</Text>
+                  <Text style={[styles.thText, { width: 140 }]}>Tanggal & Waktu</Text>
+                  <Text style={[styles.thText, { width: 180 }]}>Barang / Menu</Text>
+                  <Text style={[styles.thText, { width: 110 }]}>Kategori</Text>
+                  <Text style={[styles.thText, { width: 75, textAlign: 'center' }]}>Qty</Text>
+                  <Text style={[styles.thText, { width: 110, textAlign: 'right' }]}>Harga (Rp)</Text>
+                  <Text style={[styles.thText, { width: 130, textAlign: 'right' }]}>Total (Rp)</Text>
+                  <Text style={[styles.thText, { width: 90, textAlign: 'center' }]}>Status</Text>
+                  <Text style={[styles.thText, { width: 60, textAlign: 'center' }]}>Aksi</Text>
+                </View>
+
+                {/* Table Body Rows */}
+                {filteredTransactions.map((item, index) => {
+                  const isEven = index % 2 === 0;
+                  return (
+                    <View
+                      key={item.id}
+                      style={[styles.tableDataRow, isEven ? styles.rowEven : styles.rowOdd]}
                     >
-                      Rekap Per {periodOption}
+                      {/* No */}
+                      <Text style={[styles.tdText, { width: 44, textAlign: 'center', color: '#64748B' }]}>
+                        {index + 1}
+                      </Text>
+
+                      {/* Tanggal & Waktu */}
+                      <View style={{ width: 140, paddingRight: 8 }}>
+                        <Text style={styles.datePrimaryText}>{item.fullDateText.split(',')[0] || ''}</Text>
+                        <Text style={styles.dateSubText}>
+                          {item.fullDateText.includes(',') ? item.fullDateText.split(',')[1].trim() : item.fullDateText}
+                        </Text>
+                        <Text style={styles.timeTagText}>{item.timeText}</Text>
+                      </View>
+
+                      {/* Nama Menu */}
+                      <View style={{ width: 180, paddingRight: 8 }}>
+                        <Text style={styles.itemTitleText}>{item.name}</Text>
+                      </View>
+
+                      {/* Kategori */}
+                      <View style={{ width: 110, paddingRight: 8 }}>
+                        <View style={styles.categoryPillTeal}>
+                          <Text style={styles.categoryPillText}>{item.category}</Text>
+                        </View>
+                      </View>
+
+                      {/* Qty */}
+                      <View style={{ width: 75, alignItems: 'center' }}>
+                        <Text style={styles.qtyText}>
+                          {item.quantity} <Text style={{ fontSize: 11, color: '#64748B' }}>{item.unit}</Text>
+                        </Text>
+                      </View>
+
+                      {/* Harga Satuan */}
+                      <Text style={[styles.tdText, { width: 110, textAlign: 'right', color: '#475569' }]}>
+                        {item.price.toLocaleString('id-ID')}
+                      </Text>
+
+                      {/* Total */}
+                      <Text style={[styles.tdText, { width: 130, textAlign: 'right', fontWeight: '800', color: '#10B981' }]}>
+                        {formatRupiah(item.total)}
+                      </Text>
+
+                      {/* Status / Metode */}
+                      <View style={{ width: 90, alignItems: 'center' }}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            item.paymentMethod === 'Lunas' ? styles.statusLunas : styles.statusHutang,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusBadgeText,
+                              item.paymentMethod === 'Lunas'
+                                ? { color: '#065F46' }
+                                : { color: '#92400E' },
+                            ]}
+                          >
+                            {item.paymentMethod}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Aksi */}
+                      <View style={{ width: 60, alignItems: 'center' }}>
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          style={styles.deleteBtn}
+                          onPress={() => handleDeleteItem(item.id, item.name)}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Table Summary Footer Row */}
+                <View style={styles.tableFooterRow}>
+                  <View style={{ width: 474, paddingLeft: 12 }}>
+                    <Text style={styles.footerLabelTitle}>TOTAL KESELURUHAN REKAP</Text>
+                    <Text style={styles.footerLabelSub}>
+                      {filteredTransactions.length} Transaksi Terpilih
                     </Text>
-                    {isSelected && <Ionicons name="checkmark-circle" size={18} color="#14A39F" />}
-                  </TouchableOpacity>
-                );
-              })}
+                  </View>
+
+                  <View style={{ width: 75, alignItems: 'center' }}>
+                    <Text style={styles.footerQtyTotal}>{totalQuantity}</Text>
+                  </View>
+
+                  <View style={{ width: 110 }} />
+
+                  <View style={{ width: 130, alignItems: 'flex-end', paddingRight: 8 }}>
+                    <Text style={styles.footerGrandTotalIncome}>{formatRupiah(totalAmount)}</Text>
+                  </View>
+
+                  <View style={{ width: 150 }} />
+                </View>
+              </View>
+            </ScrollView>
+          ) : (
+            /* Empty State */
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="file-tray-outline" size={44} color="#94A3B8" />
+              </View>
+              <Text style={styles.emptyTitle}>Tidak Ada Data Pemasukan</Text>
+              <Text style={styles.emptySubtitle}>
+                Tidak ada transaksi pada filter periode {selectedMonthObj.shortLabel}
+                {selectedWeek !== 'ALL' ? ` (${selectedWeekObj.shortLabel})` : ''}
+                {selectedDate !== 'ALL' ? ` (${selectedDayObj.shortLabel})` : ''}.
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.emptyAddBtnTeal}
+                onPress={() => setOrderModalVisible(true)}
+              >
+                <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyAddBtnText}>Tambah Transaksi Baru</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {/* Dynamic Card Grid (Hari: Terbaru Sabtu -> Minggu, Minggu: M5 -> M1, Bulan: Des -> Jan) */}
-        <View style={styles.calendarGrid}>
-          {activeCards.map((item) => {
-            const isSelected = selectedDayId === item.id;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.85}
-                style={[styles.calendarCard, isSelected && styles.calendarCardSelected]}
-                onPress={() => handleCardPress(item.id)}
-              >
-                {/* Spiral Binder Rings */}
-                <View style={styles.binderRingsRow}>
-                  <View style={styles.binderRing} />
-                  <View style={styles.binderRing} />
-                </View>
-
-                {/* Scalloped Header Banner (Only Minggu/Sun is Red when activePeriod is Hari) */}
-                <View
-                  style={[
-                    styles.cardHeaderBanner,
-                    activePeriod === 'Hari'
-                      ? item.isRedHeader
-                        ? styles.headerRed
-                        : styles.headerTeal
-                      : styles.headerTeal,
-                    isSelected && styles.headerSelected,
-                  ]}
-                >
-                  <Text style={styles.dayNameText}>{item.dayName}</Text>
-                  <View style={styles.waveScallopPattern} />
-                </View>
-
-                {/* Big Day/Week/Month Number Body */}
-                <View style={styles.cardBody}>
-                  <Text
-                    style={[
-                      styles.dayNumberText,
-                      isSelected && styles.dayNumberSelected,
-                      activePeriod === 'Minggu' && { fontSize: 32 },
-                    ]}
-                  >
-                    {item.dayNumber}
-                  </Text>
-                  <Text style={styles.tapToViewText}>Tekan untuk rincian</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* Quick Floating Add Bar */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.bottomFloatingBtn}
+          onPress={() => setOrderModalVisible(true)}
+        >
+          <Ionicons name="add-circle" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
+          <Text style={styles.bottomFloatingBtnText}>+ Tambah Transaksi Pemasukan</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* POP-UP MODAL CONTAINER WITH CASHIER TABLE */}
+      {/* ========================================================
+          DROPDOWN SELECTION MODAL (Bulan / Minggu / Hari)
+      ======================================================== */}
       <Modal
-        visible={tableModalVisible}
+        visible={activeDropdownType !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setTableModalVisible(false)}
+        onRequestClose={() => setActiveDropdownType(null)}
       >
-        <TouchableWithoutFeedback onPress={() => setTableModalVisible(false)}>
+        <TouchableWithoutFeedback onPress={() => setActiveDropdownType(null)}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-              <View style={styles.tableModalContent}>
-                {/* Modal Header */}
-                <View style={styles.modalHeaderRow}>
-                  <View style={styles.modalHeaderTitleBox}>
-                    <Ionicons name="receipt" size={24} color="#14A39F" style={{ marginRight: 8 }} />
-                    <View>
-                      <Text style={styles.modalHeaderTitle}>Tabel Rekap Pemasukan</Text>
-                      <Text style={styles.modalHeaderSub}>{selectedDay.fullDateText}</Text>
-                    </View>
+              <View style={styles.dropdownModalCard}>
+                {/* Modal Title Bar */}
+                <View style={styles.dropdownModalHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons
+                      name={
+                        activeDropdownType === 'MONTH'
+                          ? 'calendar'
+                          : activeDropdownType === 'WEEK'
+                          ? 'time'
+                          : 'today'
+                      }
+                      size={20}
+                      color="#14A39F"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.dropdownModalTitle}>
+                      {activeDropdownType === 'MONTH'
+                        ? 'Pilih Bulan Rekap'
+                        : activeDropdownType === 'WEEK'
+                        ? 'Pilih Minggu ke-Berapa'
+                        : 'Pilih Hari & Tanggal'}
+                    </Text>
                   </View>
-
                   <TouchableOpacity
                     activeOpacity={0.7}
-                    style={styles.closeIconBtn}
-                    onPress={() => setTableModalVisible(false)}
+                    onPress={() => setActiveDropdownType(null)}
+                    style={{ padding: 4 }}
                   >
-                    <Ionicons name="close" size={24} color="#64748B" />
+                    <Ionicons name="close" size={22} color="#64748B" />
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.modalDivider} />
+                <View style={styles.dropdownModalDivider} />
 
-                {/* Modal Body: Cashier POS Table */}
-                <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-                  {filteredProducts.length > 0 ? (
-                    <View style={styles.posTableCardModal}>
-                      {/* Table Header */}
-                      <View style={styles.posTableHeader}>
-                        <Text style={[styles.posTh, { flex: 2.2 }]}>Barang / Produk</Text>
-                        <Text style={[styles.posTh, { flex: 1, textAlign: 'center' }]}>Qty</Text>
-                        <Text style={[styles.posTh, { flex: 1.3, textAlign: 'right' }]}>Harga</Text>
-                        <Text style={[styles.posTh, { flex: 1.6, textAlign: 'right' }]}>Subtotal</Text>
-                      </View>
-
-                      {/* Table Rows */}
-                      {filteredProducts.map((prod, idx) => (
-                        <View
-                          key={prod.id}
-                          style={[styles.posTableRow, idx % 2 === 1 && styles.posTableRowAlt]}
+                {/* List of Options */}
+                <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+                  {activeDropdownType === 'MONTH' &&
+                    MONTH_OPTIONS.map((opt) => {
+                      const isSelected = selectedMonth === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          activeOpacity={0.7}
+                          style={[
+                            styles.dropdownModalItem,
+                            isSelected && styles.dropdownModalItemActive,
+                          ]}
+                          onPress={() => handleSelectMonth(opt.id)}
                         >
-                          <View style={{ flex: 2.2, paddingRight: 4 }}>
-                            <Text style={styles.posItemName}>{prod.name}</Text>
-                            <View style={styles.posTagRow}>
-                              <Text style={styles.posCategoryTag}>{prod.category}</Text>
-                              <View
-                                style={[
-                                  styles.statusDot,
-                                  prod.paymentMethod === 'Lunas'
-                                    ? { backgroundColor: '#10B981' }
-                                    : { backgroundColor: '#F59E0B' },
-                                ]}
-                              />
-                            </View>
-                          </View>
-
-                          <Text style={[styles.posTd, { flex: 1, textAlign: 'center', fontWeight: '700' }]}>
-                            {prod.quantity} {prod.unit}
+                          <Text
+                            style={[
+                              styles.dropdownModalItemText,
+                              isSelected && styles.dropdownModalItemTextActive,
+                            ]}
+                          >
+                            {opt.label}
                           </Text>
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={20} color="#14A39F" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
 
-                          <Text style={[styles.posTd, { flex: 1.3, textAlign: 'right', color: '#64748B' }]}>
-                            {formatRupiah(prod.price)}
+                  {activeDropdownType === 'WEEK' &&
+                    WEEK_OPTIONS.map((opt) => {
+                      const isSelected = selectedWeek === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          activeOpacity={0.7}
+                          style={[
+                            styles.dropdownModalItem,
+                            isSelected && styles.dropdownModalItemActive,
+                          ]}
+                          onPress={() => handleSelectWeek(opt.id)}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownModalItemText,
+                              isSelected && styles.dropdownModalItemTextActive,
+                            ]}
+                          >
+                            {opt.label}
                           </Text>
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={20} color="#14A39F" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
 
-                          <Text style={[styles.posTd, { flex: 1.6, textAlign: 'right', fontWeight: '800', color: '#10B981' }]}>
-                            {formatRupiah(prod.total)}
+                  {activeDropdownType === 'DAY' &&
+                    dynamicDayOptions.map((opt) => {
+                      const isSelected = selectedDate === opt.id;
+                      return (
+                        <TouchableOpacity
+                          key={opt.id}
+                          activeOpacity={0.7}
+                          style={[
+                            styles.dropdownModalItem,
+                            isSelected && styles.dropdownModalItemActive,
+                          ]}
+                          onPress={() => handleSelectDay(opt.id)}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownModalItemText,
+                              isSelected && styles.dropdownModalItemTextActive,
+                            ]}
+                          >
+                            {opt.label}
                           </Text>
-                        </View>
-                      ))}
-
-                      {/* Footer Summary inside Modal */}
-                      <View style={styles.posTableFooter}>
-                        <View style={{ flex: 2.2 }}>
-                          <Text style={styles.footerSummaryTitle}>Total Rekap</Text>
-                          <Text style={styles.footerSummarySub}>
-                            {filteredProducts.length} Produk • {totalQtySelectedDay} Items
-                          </Text>
-                        </View>
-
-                        <View style={{ flex: 2.9, alignItems: 'flex-end' }}>
-                          <Text style={styles.footerTotalAmountTextTeal}>
-                            {formatRupiah(totalIncomeSelectedDay)}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  ) : (
-                    /* Modal Empty State */
-                    <View style={styles.emptyModalBox}>
-                      <Ionicons name="folder-open-outline" size={48} color="#94A3B8" />
-                      <Text style={styles.emptyModalTitle}>Belum Ada Rekap Pemasukan</Text>
-                      <Text style={styles.emptyModalSub}>
-                        Tidak ada transaksi barang pemasukan pada{' '}
-                        <Text style={{ fontWeight: '700', color: '#475569' }}>{selectedDay.fullDateText}</Text>.
-                      </Text>
-                    </View>
-                  )}
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={20} color="#14A39F" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
                 </ScrollView>
-
-                {/* Modal Footer Actions */}
-                <View style={styles.modalFooterActions}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.modalBtnClose}
-                    onPress={() => setTableModalVisible(false)}
-                  >
-                    <Text style={styles.modalBtnCloseText}>Tutup</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.modalBtnAddTeal}
-                    onPress={() => {
-                      setTableModalVisible(false);
-                      setOrderModalVisible(true);
-                    }}
-                  >
-                    <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
-                    <Text style={styles.modalBtnAddText}>Tambah Barang</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
             </TouchableWithoutFeedback>
           </View>
@@ -431,7 +654,7 @@ export default function RekapPemasukanScreen() {
       <OrderModal
         visible={orderModalVisible}
         onClose={() => setOrderModalVisible(false)}
-        onSave={handleAddTransaction}
+        onSave={handleSaveTransaction}
         defaultType="IN"
       />
     </View>
@@ -447,12 +670,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#14A39F',
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
-    paddingBottom: 16,
+    paddingBottom: 18,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
   },
   headerSafeArea: {
     paddingTop: Platform.OS === 'android' ? 36 : 10,
@@ -462,17 +685,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   backButton: {
     padding: 4,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#FFFFFF',
   },
-  iconButton: {
+  addHeaderBtn: {
     padding: 4,
   },
   summaryCard: {
@@ -485,51 +708,31 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  summaryDateRow: {
+  filterBreadcrumbRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  miniCalendarBox: {
-    width: 36,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    marginRight: 12,
-    alignItems: 'center',
-  },
-  miniCalendarHeader: {
-    width: '100%',
-    height: 12,
-    backgroundColor: '#14A39F',
+  badgeIndicator: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginRight: 8,
   },
-  miniRingDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#FFFFFF',
+  badgeIndicatorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#14A39F',
+    marginLeft: 4,
   },
-  miniCalendarBody: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  miniCalendarNumber: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  summaryDateTitle: {
-    fontSize: 16,
+  breadcrumbText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#1E293B',
+    flex: 1,
   },
   summaryDivider: {
     height: 1,
@@ -539,53 +742,50 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
   },
   metricColumn: {
     flex: 1,
     alignItems: 'flex-start',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   verticalDivider: {
     width: 1,
-    height: 40,
+    height: 38,
     backgroundColor: '#E2E8F0',
-    marginHorizontal: 12,
+    marginHorizontal: 8,
   },
   metricLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: '#64748B',
     marginBottom: 4,
   },
-  metricQtyValue: {
+  metricValCount: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  metricValQty: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#14A39F',
   },
-  metricIncomeValue: {
+  metricValIncome: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#10B981',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
-  /* DROPDOWN FILTER STYLES */
-  dropdownSection: {
-    position: 'relative',
-    marginBottom: 20,
-    zIndex: 50,
-  },
-  dropdownTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  /* FILTER SECTION CARD */
+  filterSectionCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 14,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     shadowColor: '#000000',
@@ -594,325 +794,345 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  dropdownTriggerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dropdownLabelPrefix: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  dropdownSelectedValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  dropdownMenuCard: {
-    position: 'absolute',
-    top: 52,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 8,
-    zIndex: 100,
-  },
-  dropdownMenuItem: {
+  filterSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    marginBottom: 12,
   },
-  dropdownMenuItemActive: {
-    backgroundColor: '#F0FDFA',
-  },
-  dropdownMenuText: {
-    fontSize: 14,
-    fontWeight: '600',
+  filterSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#334155',
   },
-  dropdownMenuTextActive: {
-    fontWeight: '800',
-    color: '#14A39F',
+  resetFilterText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
   },
-  calendarGrid: {
+  dropdownsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    gap: 8,
   },
-  calendarCard: {
-    width: (SCREEN_WIDTH - 52) / 2,
+  dropdownButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  dropdownButtonActive: {
+    borderColor: '#14A39F',
+    backgroundColor: '#F0FDFA',
+  },
+  dropdownBtnContent: {
+    flex: 1,
+    marginRight: 4,
+  },
+  dropdownBtnLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  dropdownBtnValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  /* TABLE CARD CONTAINER */
+  tableCardContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    marginBottom: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    marginBottom: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  calendarCardSelected: {
-    borderColor: '#14A39F',
-    transform: [{ scale: 1.02 }],
-  },
-  binderRingsRow: {
-    position: 'absolute',
-    top: 6,
-    left: 0,
-    right: 0,
+  tableCardTopBar: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    zIndex: 10,
-    paddingHorizontal: 30,
-  },
-  binderRing: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#1E293B',
-  },
-  cardHeaderBanner: {
-    paddingTop: 18,
-    paddingBottom: 12,
     alignItems: 'center',
-    position: 'relative',
-  },
-  headerTeal: {
-    backgroundColor: '#14A39F',
-  },
-  headerRed: {
-    backgroundColor: '#EF4444',
-  },
-  headerSelected: {
-    backgroundColor: '#14A39F',
-  },
-  dayNameText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-  },
-  waveScallopPattern: {
-    position: 'absolute',
-    bottom: -4,
-    left: 0,
-    right: 0,
-    height: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 6,
-    borderTopRightRadius: 6,
   },
-  cardBody: {
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayNumberText: {
-    fontSize: 38,
+  tableCardTitle: {
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
-  dayNumberSelected: {
-    color: '#14A39F',
+  countBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
-  tapToViewText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  posTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#1E293B',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-  },
-  posTh: {
-    color: '#F8FAFC',
-    fontSize: 12,
+  countBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#475569',
+  },
+  horizontalScroll: {
+    flexGrow: 0,
+  },
+  tableStructure: {
+    minWidth: 840,
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  thText: {
+    color: '#F8FAFC',
+    fontSize: 11,
+    fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  posTableRow: {
+  tableDataRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  rowEven: {
     backgroundColor: '#FFFFFF',
   },
-  posTableRowAlt: {
+  rowOdd: {
     backgroundColor: '#F8FAFC',
   },
-  posItemName: {
-    fontSize: 13,
+  tdText: {
+    fontSize: 12,
+    color: '#1E293B',
+  },
+  datePrimaryText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#0F172A',
   },
-  posTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-  },
-  posCategoryTag: {
-    fontSize: 10,
-    fontWeight: '600',
+  dateSubText: {
+    fontSize: 11,
     color: '#64748B',
-    marginRight: 6,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  timeTagText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 1,
   },
-  posTd: {
+  itemTitleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  categoryPillTeal: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E6FFFA',
+    borderColor: '#99F6E4',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  categoryPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0D9488',
+  },
+  qtyText: {
     fontSize: 13,
-    color: '#1E293B',
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  posTableFooter: {
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusLunas: {
+    backgroundColor: '#D1FAE5',
+  },
+  statusHutang: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  deleteBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+  },
+  tableFooterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#F1F5F9',
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     borderTopWidth: 2,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#CBD5E1',
   },
-  footerSummaryTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
+  footerLabelTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 0.5,
   },
-  footerSummarySub: {
+  footerLabelSub: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
   },
-  footerTotalAmountTextTeal: {
-    fontSize: 16,
+  footerQtyTotal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  footerGrandTotalIncome: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#10B981',
   },
-  /* MODAL STYLES FOR CASHIER POP UP */
+  /* EMPTY STATE */
+  emptyContainer: {
+    paddingVertical: 44,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 18,
+  },
+  emptyAddBtnTeal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#14A39F',
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 14,
+    shadowColor: '#14A39F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  emptyAddBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  /* FLOATING BOTTOM BUTTON */
+  bottomFloatingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#14A39F',
+    borderRadius: 16,
+    paddingVertical: 14,
+    shadowColor: '#14A39F',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  bottomFloatingBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  /* DROPDOWN MODAL STYLES */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 24,
   },
-  tableModalContent: {
+  dropdownModalCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 22,
+    padding: 18,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 8,
-    maxHeight: Dimensions.get('window').height * 0.82,
   },
-  modalHeaderRow: {
+  dropdownModalHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingBottom: 10,
   },
-  modalHeaderTitleBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  modalHeaderTitle: {
-    fontSize: 18,
+  dropdownModalTitle: {
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
-  modalHeaderSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 1,
-  },
-  closeIconBtn: {
-    padding: 4,
-  },
-  modalDivider: {
+  dropdownModalDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 14,
-  },
-  posTableCardModal: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 4,
-  },
-  emptyModalBox: {
-    paddingVertical: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyModalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#334155',
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  emptyModalSub: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-  },
-  modalFooterActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 16,
-    gap: 10,
-  },
-  modalBtnClose: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
     backgroundColor: '#F1F5F9',
+    marginBottom: 10,
   },
-  modalBtnCloseText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  modalBtnAddTeal: {
+  dropdownModalItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: '#14A39F',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
   },
-  modalBtnAddText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  dropdownModalItemActive: {
+    backgroundColor: '#F0FDFA',
+  },
+  dropdownModalItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  dropdownModalItemTextActive: {
+    fontWeight: '800',
+    color: '#14A39F',
   },
 });
