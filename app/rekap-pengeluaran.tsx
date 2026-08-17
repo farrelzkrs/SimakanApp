@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
 import { useTransactions, TransactionItem } from '@/context/TransactionContext';
+import { useInventory } from '@/context/InventoryContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -50,6 +51,7 @@ export default function RekapPengeluaranScreen() {
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
   const { transactions, addTransaction, deleteTransaction } = useTransactions();
+  const { registerOrRestockExpenseItem } = useInventory();
 
   // Cascading Filter States
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
@@ -184,6 +186,13 @@ export default function RekapPengeluaranScreen() {
 
   const handleSaveTransaction = (data: OrderFormData) => {
     addTransaction(data, 'day-sat');
+    registerOrRestockExpenseItem({
+      name: data.name,
+      category: data.category,
+      quantity: data.quantity,
+      unit: data.unit,
+      price: data.price,
+    });
     setOrderModalVisible(false);
   };
 

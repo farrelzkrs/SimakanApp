@@ -19,6 +19,7 @@ import OrderModal, { OrderFormData } from '@/components/OrderModal';
 import { useDatabase } from '@/hooks/use-database';
 import { TransactionService } from '@/services/TransactionService';
 import { useTransactions } from '@/context/TransactionContext';
+import { useInventory } from '@/context/InventoryContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -140,6 +141,7 @@ export default function DashboardScreen() {
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
   
   const { addTransaction } = useTransactions();
+  const { registerOrRestockExpenseItem, adjustStockByItemName } = useInventory();
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
   const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
@@ -312,6 +314,19 @@ export default function DashboardScreen() {
 
       // Add to Central Transaction Context for Rekap sync
       addTransaction(formData, 'day-sat');
+
+      // Sync with Inventory (auto register / restock expense items or deduct sold items)
+      if (formData.transactionType === 'OUT') {
+        registerOrRestockExpenseItem({
+          name: formData.name,
+          category: formData.category,
+          quantity: formData.quantity,
+          unit: formData.unit,
+          price: formData.price,
+        });
+      } else {
+        adjustStockByItemName(formData.name, -formData.quantity);
+      }
 
       setTransactions((prev) => [newTrx, ...prev]);
       Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil dicatat dan masuk ke Rekap!`);

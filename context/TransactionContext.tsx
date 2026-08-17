@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OrderFormData } from '@/components/OrderModal';
+
+const STORAGE_KEY = '@simakan_transactions';
 
 export interface TransactionItem {
   id: string;
@@ -339,6 +342,32 @@ const TransactionContext = createContext<TransactionContextType | undefined>(und
 export function TransactionProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
 
+  // Load persistent transactions on mount
+  useEffect(() => {
+    async function loadStoredTransactions() {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTransactions(parsed);
+          }
+        }
+      } catch (err) {
+        console.log('Error loading transactions from storage:', err);
+      }
+    }
+    loadStoredTransactions();
+  }, []);
+
+  const saveTransactions = async (items: TransactionItem[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (err) {
+      console.log('Error saving transactions to storage:', err);
+    }
+  };
+
   const addTransaction = (data: OrderFormData, targetDayId?: string, customDate?: Date) => {
     const qty = data.quantity || 1;
     const price = data.price || 0;
@@ -388,11 +417,19 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       timestamp: now.getTime(),
     };
 
-    setTransactions((prev) => [newTrx, ...prev]);
+    setTransactions((prev) => {
+      const updated = [newTrx, ...prev];
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((item) => item.id !== id));
+    setTransactions((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   const getTransactionsByDay = (dayId: string, type?: 'IN' | 'OUT') => {

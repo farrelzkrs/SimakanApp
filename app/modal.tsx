@@ -4,10 +4,14 @@ import { useRouter } from 'expo-router';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
 import { useDatabase } from '@/hooks/use-database';
 import { TransactionService } from '@/services/TransactionService';
+import { useTransactions } from '@/context/TransactionContext';
+import { useInventory } from '@/context/InventoryContext';
 
 export default function ModalScreen() {
   const router = useRouter();
   const { db } = useDatabase();
+  const { addTransaction } = useTransactions();
+  const { registerOrRestockExpenseItem, adjustStockByItemName } = useInventory();
   const [visible, setVisible] = useState(true);
 
   const handleClose = () => {
@@ -29,10 +33,25 @@ export default function ModalScreen() {
           payment_method: data.paymentMethod,
           description: `${data.name} (${data.category})`,
         });
-        Alert.alert('Sukses', 'Pesanan berhasil disimpan!');
-      } else {
-        Alert.alert('Sukses', `Pesanan ${data.name} dicatat!`);
       }
+
+      // Sync with Central Transaction Context for Rekap
+      addTransaction(data, 'day-sat');
+
+      // Sync with Inventory Context
+      if (data.transactionType === 'OUT') {
+        registerOrRestockExpenseItem({
+          name: data.name,
+          category: data.category,
+          quantity: data.quantity,
+          unit: data.unit,
+          price: data.price,
+        });
+      } else {
+        adjustStockByItemName(data.name, -data.quantity);
+      }
+
+      Alert.alert('Sukses', 'Pesanan berhasil disimpan!');
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'Gagal menyimpan pesanan.');
