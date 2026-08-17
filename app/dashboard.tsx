@@ -140,7 +140,7 @@ export default function DashboardScreen() {
   const { db } = useDatabase();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
   
-  const { addTransaction } = useTransactions();
+  const { addTransaction, updateTransaction, deleteTransaction } = useTransactions();
   const { registerOrRestockExpenseItem, adjustStockByItemName } = useInventory();
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
@@ -258,6 +258,9 @@ export default function DashboardScreen() {
         }
       }
 
+      // Sync with Central Transaction Context for Rekap
+      updateTransaction(formData.id, formData);
+
       setTransactions((prev) =>
         prev.map((t) =>
           t.id === formData.id
@@ -345,6 +348,9 @@ export default function DashboardScreen() {
         console.log('DB Delete error fallback:', e);
       }
     }
+
+    // Sync deletion with Central Transaction Context
+    deleteTransaction(id);
 
     setTransactions((prev) => prev.filter((t) => t.id !== id));
     setIsModalOpen(false);

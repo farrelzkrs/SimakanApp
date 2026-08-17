@@ -26,6 +26,7 @@ export interface TransactionItem {
 interface TransactionContextType {
   transactions: TransactionItem[];
   addTransaction: (data: OrderFormData, targetDayId?: string, customDate?: Date) => void;
+  updateTransaction: (id: string, data: Partial<OrderFormData>) => void;
   deleteTransaction: (id: string) => void;
   getTransactionsByDay: (dayId: string, type?: 'IN' | 'OUT') => TransactionItem[];
   getTotalByType: (type: 'IN' | 'OUT', dayId?: string) => number;
@@ -424,6 +425,32 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     });
   };
 
+  const updateTransaction = (id: string, data: Partial<OrderFormData>) => {
+    setTransactions((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          const qty = data.quantity !== undefined ? data.quantity : item.quantity;
+          const price = data.price !== undefined ? data.price : item.price;
+          const total = qty * price;
+          return {
+            ...item,
+            name: data.name ?? item.name,
+            category: data.category ?? item.category,
+            quantity: qty,
+            unit: data.unit ?? item.unit,
+            price: price,
+            total: total,
+            paymentMethod: (data.paymentMethod ?? item.paymentMethod) as 'Lunas' | 'Hutang',
+            transactionType: (data.transactionType ?? item.transactionType) as 'IN' | 'OUT',
+          };
+        }
+        return item;
+      });
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
   const deleteTransaction = (id: string) => {
     setTransactions((prev) => {
       const updated = prev.filter((item) => item.id !== id);
@@ -451,6 +478,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       value={{
         transactions,
         addTransaction,
+        updateTransaction,
         deleteTransaction,
         getTransactionsByDay,
         getTotalByType,
