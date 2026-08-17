@@ -185,7 +185,7 @@ export default function RekapPengeluaranScreen() {
   };
 
   const handleSaveTransaction = (data: OrderFormData) => {
-    addTransaction(data, 'day-sat');
+    addTransaction(data);
     registerOrRestockExpenseItem({
       name: data.name,
       category: data.category,

@@ -371,9 +371,10 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     const qty = data.quantity || 1;
     const price = data.price || 0;
     const total = qty * price;
-    const assignedDayId = targetDayId || 'day-sat';
-
     const now = customDate || new Date();
+    const dayMap = ['day-sun', 'day-mon', 'day-tue', 'day-wed', 'day-thu', 'day-fri', 'day-sat'];
+    const assignedDayId = targetDayId || dayMap[now.getDay()];
+
     const timeText = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
     
     // Format full date text

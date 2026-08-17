@@ -36,7 +36,7 @@ export default function ModalScreen() {
       }
 
       // Sync with Central Transaction Context for Rekap
-      addTransaction(data, 'day-sat');
+      addTransaction(data);
 
       // Sync with Inventory Context
       if (data.transactionType === 'OUT') {

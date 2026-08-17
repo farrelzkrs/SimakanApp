@@ -150,7 +150,7 @@ export default function StatisticsScreen() {
   };
 
   const handleSaveModalOrder = (data: OrderFormData) => {
-    addTransaction(data, 'day-sat');
+    addTransaction(data);
     setIsModalOpen(false);
     setEditingItem(null);
     Alert.alert('Sukses', `Catatan hutang untuk "${data.debtorName || data.name}" berhasil dicatat!`);

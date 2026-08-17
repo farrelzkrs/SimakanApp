@@ -185,7 +185,7 @@ export default function RekapPemasukanScreen() {
   };
 
   const handleSaveTransaction = (data: OrderFormData) => {
-    addTransaction(data, 'day-sat');
+    addTransaction(data);
     adjustStockByItemName(data.name, -data.quantity);
     setOrderModalVisible(false);
   };

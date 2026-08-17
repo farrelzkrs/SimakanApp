@@ -146,6 +146,22 @@ export default function DashboardScreen() {
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
   const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
 
+  // Live Real-Time Device Clock & Date
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    // Update live clock every 10 seconds to keep in sync with device
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const dayNumber = currentDate.getDate();
+  const dayName = currentDate.toLocaleDateString('id-ID', { weekday: 'long' });
+  const monthYearName = currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const timeFormatted = currentDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+
   // Modal CRUD State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderFormData | null>(null);
@@ -316,7 +332,7 @@ export default function DashboardScreen() {
       };
 
       // Add to Central Transaction Context for Rekap sync
-      addTransaction(formData, 'day-sat');
+      addTransaction(formData);
 
       // Sync with Inventory (auto register / restock expense items or deduct sold items)
       if (formData.transactionType === 'OUT') {
@@ -370,7 +386,12 @@ export default function DashboardScreen() {
           <SafeAreaView style={styles.headerSafeArea}>
             {/* Top Bar: Greeting & Notification */}
             <View style={styles.topBar}>
-              <Text style={styles.greetingText}>Halo, Syahrul!</Text>
+              <View>
+                <Text style={styles.greetingText}>Halo, Syahrul!</Text>
+                <Text style={styles.liveClockSubText}>
+                  {dayName}, {dayNumber} {monthYearName} • {timeFormatted}
+                </Text>
+              </View>
 
               <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
                 <Ionicons name="notifications" size={24} color="#FFFFFF" />
@@ -454,12 +475,12 @@ export default function DashboardScreen() {
                 <View style={styles.bluePillIndicator} />
 
                 {/* Date Day Number */}
-                <Text style={styles.dateNumberText}>13</Text>
+                <Text style={styles.dateNumberText}>{dayNumber}</Text>
 
                 {/* Day Name & Month Year Column */}
                 <View style={styles.dateTextColumn}>
-                  <Text style={styles.dayNameText}>Kamis</Text>
-                  <Text style={styles.monthYearText}>Agustus 2026</Text>
+                  <Text style={styles.dayNameText}>{dayName}</Text>
+                  <Text style={styles.monthYearText}>{monthYearName}</Text>
                 </View>
               </View>
 
@@ -655,6 +676,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  liveClockSubText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '600',
+    marginTop: 2,
   },
   notificationButton: {
     position: 'relative',
