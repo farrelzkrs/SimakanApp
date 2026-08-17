@@ -527,19 +527,6 @@ export default function StatisticsScreen() {
         )}
       </ScrollView>
 
-      {/* Quick Floating Add Button */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={[styles.floatingAddBtn, { bottom: 75 + bottomInset }]}
-        onPress={() => {
-          setEditingItem(null);
-          setIsModalOpen(true);
-        }}
-      >
-        <Ionicons name="add" size={24} color="#FFFFFF" />
-        <Text style={styles.floatingAddBtnText}>Catat Hutang</Text>
-      </TouchableOpacity>
-
       {/* Order Modal for adding / editing debt transactions */}
       <OrderModal
         visible={isModalOpen}
@@ -998,27 +985,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
-  },
-  floatingAddBtn: {
-    position: 'absolute',
-    right: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#14A39F',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 24,
-    shadowColor: '#14A39F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  floatingAddBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginLeft: 6,
   },
   bottomNav: {
     flexDirection: 'row',
