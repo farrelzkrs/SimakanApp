@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_DB_VERSION = 1;
+const CURRENT_DB_VERSION = 2;
 
 export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -9,9 +9,13 @@ export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
 
   if (currentVersion < 1) {
     await migrateV1(db);
-  } else {
-    await seedDefaultData(db);
   }
+
+  if (currentVersion < 2) {
+    await migrateV2(db);
+  }
+
+  await seedDefaultData(db);
 }
 
 async function migrateV1(db: SQLiteDatabase): Promise<void> {
@@ -143,8 +147,17 @@ async function migrateV1(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_stock_movements_date ON stock_movements(created_at);
 
   `);
+}
 
-  await seedDefaultData(db);
+async function migrateV2(db: SQLiteDatabase): Promise<void> {
+  const columns = await db.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(transactions)`
+  );
+  const hasCustomerName = columns.some((c) => c.name === 'customer_name');
+
+  if (!hasCustomerName) {
+    await db.execAsync(`ALTER TABLE transactions ADD COLUMN customer_name VARCHAR(100)`);
+  }
 
   await db.execAsync(`PRAGMA user_version = ${CURRENT_DB_VERSION}`);
 }

@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput,
-  Dimensions,
-  SafeAreaView,
   Platform,
+  Alert,
+  TextInput,
   Modal,
   TouchableWithoutFeedback,
   KeyboardAvoidingView,
-  Alert,
+  Keyboard,
+  Pressable,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,9 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useInventory, InventoryItem } from '@/context/InventoryContext';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const CATEGORIES = [
+const CATEGORY_SUGGESTIONS = [
   'Bahan Baku',
   'Makanan',
   'Minuman',
@@ -32,107 +30,121 @@ const CATEGORIES = [
   'ATK',
   'Operasional',
 ];
-
-const UNITS = ['Pcs', 'Cup', 'Kg', 'Pack', 'Karton', 'Box', 'Porsi', 'Unit', 'Rim'];
+const UNIT_OPTIONS = ['Pcs', 'Dus', 'Pack'];
 
 export default function InventoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
+  const { inventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem, updateSellingPrice, getProfit } = useInventory();
 
-  const { inventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useInventory();
+  const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('wallet');
+  const [activeTab, setActiveTab] = useState<'stok' | 'jual'>('stok');
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('Semua');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
-  // Form State for Registering / Editing Inventory Item
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Bahan Baku');
-  const [stock, setStock] = useState(10);
+  const [stock, setStock] = useState(1);
   const [unit, setUnit] = useState('Pcs');
+  const [price, setPrice] = useState(0);
   const [priceInput, setPriceInput] = useState('');
-  const [minStockInput, setMinStockInput] = useState('5');
-
-  const filteredItems = inventoryItems.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      selectedCategoryFilter === 'Semua' || item.category === selectedCategoryFilter;
-    return matchesSearch && matchesCategory;
-  });
-
-  const totalItems = inventoryItems.length;
-  const lowStockCount = inventoryItems.filter((i) => i.status === 'Menipis').length;
-  const totalStock = inventoryItems.reduce((acc, curr) => acc + curr.stock, 0);
+  const [pcsPerUnit, setPcsPerUnit] = useState(1);
+  
+  // For 'jual' tab modal
+  const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
+  const [sellingPriceInput, setSellingPriceInput] = useState('');
 
   const formatRupiah = (num: number) => {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
 
   const handleOpenAddModal = () => {
-    setEditingId(null);
+    setEditingItem(null);
     setName('');
     setCategory('Bahan Baku');
-    setStock(10);
+    setStock(1);
     setUnit('Pcs');
+    setPcsPerUnit(1);
+    setPrice(0);
     setPriceInput('');
-    setMinStockInput('5');
-    setModalVisible(true);
+    setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (item: InventoryItem) => {
-    setEditingId(item.id);
+  const handleEditItem = (item: InventoryItem) => {
+    setEditingItem(item);
     setName(item.name);
     setCategory(item.category);
     setStock(item.stock);
-    setUnit(item.unit);
+    setUnit('Pcs'); // Always load as Pcs
+    setPcsPerUnit(1);
+    setPrice(item.price);
     setPriceInput(item.price ? String(item.price) : '');
-    setMinStockInput(item.minStock ? String(item.minStock) : '5');
-    setModalVisible(true);
+    setIsModalOpen(true);
+  };
+  
+  const handleEditSales = (item: InventoryItem) => {
+    setEditingItem(item);
+    setSellingPriceInput(item.sellingPrice ? String(item.sellingPrice) : '');
+    setIsSalesModalOpen(true);
   };
 
-  const handleSaveInventory = () => {
+  const handleSaveItem = () => {
     if (!name.trim()) {
-      Alert.alert('Peringatan', 'Silakan masukkan nama barang.');
+      Alert.alert('Nama Barang Wajib', 'Silakan masukkan nama barang terlebih dahulu.');
       return;
     }
 
-    const parsedPrice = parseFloat(priceInput.replace(/[^0-9]/g, '')) || 0;
-    const parsedMinStock = parseInt(minStockInput, 10) || 5;
+    const parsedPrice = parseFloat(priceInput.replace(/[^0-9]/g, '')) || price || 0;
+    const isPackOrDus = unit === 'Dus' || unit === 'Pack';
+    const finalStock = isPackOrDus ? stock * pcsPerUnit : stock;
+    const finalPrice = isPackOrDus ? parsedPrice / pcsPerUnit : parsedPrice;
 
-    if (editingId) {
-      updateInventoryItem(editingId, {
+    if (editingItem) {
+      updateInventoryItem(editingItem.id, {
         name: name.trim(),
         category,
-        stock,
-        unit,
-        price: parsedPrice,
-        minStock: parsedMinStock,
+        stock: finalStock,
+        unit: 'Pcs',
+        price: finalPrice,
       });
+      Alert.alert('Diperbarui', `Data barang "${name}" berhasil diperbarui.`);
     } else {
       addInventoryItem({
         name: name.trim(),
         category,
-        stock,
-        unit,
-        price: parsedPrice,
-        minStock: parsedMinStock,
+        stock: finalStock,
+        unit: 'Pcs',
+        price: finalPrice,
       });
+      Alert.alert('Ditambahkan', `Barang "${name}" berhasil ditambahkan ke inventori.`);
     }
 
-    setModalVisible(false);
+    setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string, itemName: string) => {
+  const handleSaveSales = () => {
+    if (!editingItem) return;
+    
+    const parsedPrice = parseFloat(sellingPriceInput.replace(/[^0-9]/g, '')) || 0;
+    
+    updateSellingPrice(editingItem.id, parsedPrice);
+    Alert.alert('Diperbarui', `Harga jual untuk "${editingItem.name}" berhasil disetel.`);
+    setIsSalesModalOpen(false);
+  };
+
+  const handleDeleteItem = (id: string, itemName: string) => {
     Alert.alert('Konfirmasi Hapus', `Apakah Anda yakin ingin menghapus "${itemName}" dari inventori?`, [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Hapus',
         style: 'destructive',
-        onPress: () => deleteInventoryItem(id),
+        onPress: () => {
+          deleteInventoryItem(id);
+          setIsModalOpen(false);
+          setIsSalesModalOpen(false);
+        },
       },
     ]);
   };
@@ -141,468 +153,399 @@ export default function InventoryScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Top Header Section (Teal Background) */}
-      <View style={styles.headerContainer}>
-        <SafeAreaView style={styles.headerSafeArea}>
-          {/* Header Title Bar */}
-          <View style={styles.headerTopBar}>
-            <View style={styles.headerTitleLeft}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.backBtn}
-                onPress={() => router.back()}
-              >
-                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-              <View style={styles.headerTitleMeta}>
-                <Text style={styles.headerTitleText}>Inventori Barang</Text>
-                <Text style={styles.headerSubtitleText}>Pendaftaran & Stok Barang</Text>
-              </View>
-            </View>
-
-            {/* "+ Daftarkan Barang" Button */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.headerAddBtn}
-              onPress={handleOpenAddModal}
-            >
-              <Ionicons name="add" size={20} color="#14A39F" style={{ marginRight: 2 }} />
-              <Text style={styles.headerAddBtnText}>Daftar Barang</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 3 Metrics Cards Grid */}
-          <View style={styles.metricsGrid}>
-            {/* Card 1: Jenis Barang */}
-            <View style={styles.metricCard}>
-              <View style={styles.metricCardHeader}>
-                <View style={[styles.metricIconBadge, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons name="cube" size={16} color="#0284C7" />
-                </View>
-                <Text style={styles.metricLabel}>Jenis Barang</Text>
-              </View>
-              <Text style={styles.metricValue}>{totalItems}</Text>
-            </View>
-
-            {/* Card 2: Total Stok */}
-            <View style={styles.metricCard}>
-              <View style={styles.metricCardHeader}>
-                <View style={[styles.metricIconBadge, { backgroundColor: '#DCFCE7' }]}>
-                  <Ionicons name="archive" size={16} color="#16A34A" />
-                </View>
-                <Text style={styles.metricLabel}>Total Stok</Text>
-              </View>
-              <Text style={styles.metricValue}>{totalStock}</Text>
-            </View>
-
-            {/* Card 3: Stok Menipis */}
-            <View style={styles.metricCard}>
-              <View style={styles.metricCardHeader}>
-                <View style={[styles.metricIconBadge, { backgroundColor: '#FFEDD5' }]}>
-                  <Ionicons name="warning" size={16} color="#EA580C" />
-                </View>
-                <Text style={styles.metricLabel}>Stok Menipis</Text>
-              </View>
-              <Text style={[styles.metricValue, lowStockCount > 0 && { color: '#EA580C' }]}>
-                {lowStockCount}
-              </Text>
-            </View>
-          </View>
-        </SafeAreaView>
-      </View>
-
-      {/* Main Content Area */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 90 + bottomInset }]}
-      >
-        {/* Search Bar */}
-        <View style={styles.searchCard}>
-          <Ionicons name="search" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Cari nama barang atau kategori..."
-            placeholderTextColor="#94A3B8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Category Pills Selector */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryPillScroll}
-          contentContainerStyle={{ gap: 8 }}
-        >
-          {['Semua', ...CATEGORIES].map((cat) => {
-            const isSelected = selectedCategoryFilter === cat;
-            return (
-              <TouchableOpacity
-                key={cat}
-                activeOpacity={0.8}
-                style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                onPress={() => setSelectedCategoryFilter(cat)}
-              >
-                <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Section Header */}
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Daftar Stok Barang Inventori</Text>
-          <TouchableOpacity activeOpacity={0.8} style={styles.addInlineBtn} onPress={handleOpenAddModal}>
-            <Ionicons name="add-circle-outline" size={16} color="#14A39F" style={{ marginRight: 4 }} />
-            <Text style={styles.addInlineBtnText}>Tambah Barang Baru</Text>
+      {/* HEADER */}
+      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? 40 : insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Inventori Barang</Text>
+          <TouchableOpacity activeOpacity={0.8} style={styles.addBtn} onPress={handleOpenAddModal}>
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.addBtnText}>Barang</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Inventory Item Cards */}
-        {filteredItems.length > 0 ? (
-          filteredItems.map((item) => (
+        {/* Tab Switcher */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.tabBtn, activeTab === 'stok' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('stok')}
+          >
+            <Ionicons name="cube-outline" size={16} color={activeTab === 'stok' ? '#FFFFFF' : '#94A3B8'} style={{ marginRight: 6 }} />
+            <Text style={[styles.tabText, activeTab === 'stok' && styles.tabTextActive]}>Daftar Stok (Beli)</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.tabBtn, activeTab === 'jual' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('jual')}
+          >
+            <Ionicons name="pricetag-outline" size={16} color={activeTab === 'jual' ? '#FFFFFF' : '#94A3B8'} style={{ marginRight: 6 }} />
+            <Text style={[styles.tabText, activeTab === 'jual' && styles.tabTextActive]}>Penjualan (Jual)</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContainer}>
+        {inventoryItems.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="cube-outline" size={48} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>Inventori Kosong</Text>
+            <Text style={styles.emptySub}>
+              Belum ada barang di inventori. Tambahkan barang secara manual atau otomatis tercatat saat menambah Pengeluaran.
+            </Text>
+            <TouchableOpacity activeOpacity={0.8} style={styles.emptyAddBtn} onPress={handleOpenAddModal}>
+              <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.emptyAddBtnText}>Tambah Barang Baru</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          inventoryItems.map((item) => (
             <View key={item.id} style={styles.itemCard}>
-              <View style={styles.itemHeader}>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.itemTitleRow}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        item.status === 'Tersedia' ? styles.statusTersedia : styles.statusMenipis,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.statusDot,
-                          { backgroundColor: item.status === 'Tersedia' ? '#16A34A' : '#EA580C' },
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.statusText,
-                          { color: item.status === 'Tersedia' ? '#16A34A' : '#EA580C' },
-                        ]}
-                      >
-                        {item.status}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.itemMetaRow}>
-                    <Text style={styles.itemCategory}>{item.category}</Text>
-                    <Text style={styles.dotSeparator}>•</Text>
-                    <Text style={styles.itemPricePerPicis}>
-                      Harga: <Text style={styles.priceHighlight}>{formatRupiah(item.price)}</Text> / {item.unit}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Stock Bar Progress */}
-              <View style={styles.stockProgressSection}>
-                <View style={styles.stockTextRow}>
-                  <Text style={styles.stockLabel}>Sisa Stok:</Text>
-                  <Text style={styles.stockValue}>
-                    {item.stock} <Text style={{ fontSize: 12, fontWeight: '500' }}>{item.unit}</Text>
-                  </Text>
-                </View>
-
-                <View style={styles.progressBarBg}>
+              <View style={styles.itemHeaderRow}>
+                <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                
+                {activeTab === 'stok' && (
                   <View
                     style={[
-                      styles.progressBarFill,
-                      {
-                        width: `${Math.min(item.progress * 100, 100)}%`,
-                        backgroundColor: item.status === 'Tersedia' ? '#14A39F' : '#F59E0B',
-                      },
+                      styles.statusBadge,
+                      item.status === 'Tersedia' ? styles.statusTersedia : styles.statusMenipis,
                     ]}
-                  />
-                </View>
+                  >
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: item.status === 'Tersedia' ? '#16A34A' : '#D97706' },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: item.status === 'Tersedia' ? '#15803D' : '#B45309' },
+                      ]}
+                    >
+                      {item.status}
+                    </Text>
+                  </View>
+                )}
+                
+                {activeTab === 'jual' && (
+                  <View style={[styles.statusBadge, { backgroundColor: '#F0F9FF' }]}>
+                    <Ionicons name="trending-up" size={12} color="#0284C7" style={{ marginRight: 4 }} />
+                    <Text style={[styles.statusText, { color: '#0369A1' }]}>
+                      Profit: {formatRupiah(getProfit(item))}
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              {/* Action Buttons */}
-              <View style={styles.cardActionRow}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  style={styles.actionBtnEdit}
-                  onPress={() => handleOpenEditModal(item)}
-                >
-                  <Ionicons name="create-outline" size={16} color="#0284C7" />
-                  <Text style={styles.actionBtnEditText}>Edit Barang</Text>
-                </TouchableOpacity>
+              <View style={styles.itemMetaRow}>
+                <Text style={styles.itemCategory}>{item.category}</Text>
+                <Text style={styles.dotSeparator}>•</Text>
+                {activeTab === 'stok' ? (
+                  <Text style={styles.itemPricePerPicis}>
+                    Harga Beli: <Text style={styles.priceHighlight}>{formatRupiah(item.price)}</Text> / {item.unit}
+                  </Text>
+                ) : (
+                  <Text style={styles.itemPricePerPicis}>
+                    Harga Jual: <Text style={styles.priceHighlight}>{item.sellingPrice > 0 ? formatRupiah(item.sellingPrice) : 'Belum diatur'}</Text> / {item.unit}
+                  </Text>
+                )}
+              </View>
+
+              {activeTab === 'stok' && (
+                <View style={styles.stockProgressSection}>
+                  <View style={styles.stockTextRow}>
+                    <Text style={styles.stockLabel}>Sisa Stok</Text>
+                    <Text style={styles.stockValue}>
+                      {item.stock} {item.unit}
+                    </Text>
+                  </View>
+                  <View style={styles.progressBarBg}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${item.progress * 100}%`,
+                          backgroundColor: item.status === 'Tersedia' ? '#10B981' : '#F59E0B',
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+
+              <View style={[styles.cardActionRow, activeTab === 'jual' && { marginTop: 12 }]}>
+                {activeTab === 'stok' ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.actionBtnEdit}
+                    onPress={() => handleEditItem(item)}
+                  >
+                    <Ionicons name="create-outline" size={16} color="#0284C7" />
+                    <Text style={styles.actionBtnEditText}>Edit Stok & Beli</Text>
+                  </TouchableOpacity>
+                ) : (
+                   <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.actionBtnEdit}
+                    onPress={() => handleEditSales(item)}
+                  >
+                    <Ionicons name="pricetag-outline" size={16} color="#0284C7" />
+                    <Text style={styles.actionBtnEditText}>Atur Harga Jual</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   activeOpacity={0.7}
                   style={styles.actionBtnDelete}
-                  onPress={() => handleDelete(item.id, item.name)}
+                  onPress={() => handleDeleteItem(item.id, item.name)}
                 >
-                  <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                  <Ionicons name="trash-outline" size={18} color="#DC2626" />
                 </TouchableOpacity>
               </View>
             </View>
           ))
-        ) : (
-          /* Empty Inventory State */
-          <View style={styles.emptyCard}>
-            <Ionicons name="cube-outline" size={54} color="#CBD5E1" />
-            <Text style={styles.emptyTitle}>Belum Ada Barang Diinventori</Text>
-            <Text style={styles.emptySub}>
-              Silakan daftarkan barang baru beserta stok awal dan harga per picis untuk menggunakannya di catatan transaksi.
-            </Text>
-            <TouchableOpacity activeOpacity={0.8} style={styles.emptyAddBtn} onPress={handleOpenAddModal}>
-              <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyAddBtnText}>Daftarkan Barang Baru</Text>
-            </TouchableOpacity>
-          </View>
         )}
       </ScrollView>
 
-      {/* POP-UP MODAL PENDAFTARAN BARANG INVENTORI (STYLED IDENTICALLY TO DASHBOARD MODAL) */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ width: '100%', alignItems: 'center' }}
-            >
-              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                <View style={styles.modalContentCard}>
-                  {/* Modal Header */}
+      {/* CRUD MODAL FOR STOK/BELI */}
+      <Modal visible={isModalOpen} animationType="slide" transparent={true} onRequestClose={() => setIsModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); setIsModalOpen(false); }} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView} pointerEvents="box-none">
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.modalContentCard}>
+                <View style={styles.handleBar} />
+                
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
                   <View style={styles.modalHeaderRow}>
                     <View style={styles.modalHeaderTitleBox}>
                       <View style={styles.modalHeaderIconBadge}>
-                        <Ionicons name="cube-outline" size={22} color="#14A39F" />
+                        <Ionicons name="cube-outline" size={20} color="#14A39F" />
                       </View>
                       <View>
-                        <Text style={styles.modalTitle}>
-                          {editingId ? 'Edit Barang Inventori' : 'Daftar Barang Inventori'}
-                        </Text>
-                        <Text style={styles.modalSubtitle}>
-                          Masukkan rincian stok & harga per picis
-                        </Text>
+                        <Text style={styles.modalTitle}>{editingItem ? 'Edit Barang' : 'Tambah Barang'}</Text>
+                        <Text style={styles.modalSubtitle}>Data stok dan harga keluaran (beli)</Text>
                       </View>
                     </View>
-
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      style={styles.modalCloseBtn}
-                      onPress={() => setModalVisible(false)}
-                    >
+                    <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIsModalOpen(false)}>
                       <Ionicons name="close" size={24} color="#64748B" />
                     </TouchableOpacity>
                   </View>
 
                   <View style={styles.modalDivider} />
 
-                  <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
-                    {/* Form Field 1: Nama Barang */}
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>
-                        Nama Barang / Produk <Text style={styles.requiredStar}>*</Text>
-                      </Text>
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.fieldLabel}>Nama Barang <Text style={styles.requiredStar}>*</Text></Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Contoh: Kopi Susu Aren"
+                      placeholderTextColor="#A1A1AA"
+                      value={name}
+                      onChangeText={setName}
+                    />
+                  </View>
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.fieldLabel}>Kategori</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+                      {CATEGORY_SUGGESTIONS.map((cat) => (
+                        <TouchableOpacity
+                          key={cat}
+                          style={[styles.catSelectChip, category === cat && styles.catSelectChipActive]}
+                          onPress={() => setCategory(cat)}
+                        >
+                          <Text style={[styles.catSelectChipText, category === cat && styles.catSelectChipTextActive]}>{cat}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.fieldLabel}>Harga Keluaran / Beli per Unit (Rp)</Text>
+                    <View style={styles.inputPrefixBox}>
+                      <Text style={styles.inputPrefixText}>Rp</Text>
                       <TextInput
-                        style={styles.textInput}
-                        placeholder="Contoh: Kopi Susu Aren 250ml"
-                        placeholderTextColor="#94A3B8"
-                        value={name}
-                        onChangeText={setName}
+                        style={styles.prefixedInput}
+                        placeholder="Contoh: 15.000"
+                        placeholderTextColor="#A1A1AA"
+                        keyboardType="numeric"
+                        value={priceInput}
+                        onChangeText={(val) => {
+                          const numeric = val.replace(/[^0-9]/g, '');
+                          setPriceInput(numeric);
+                          setPrice(parseFloat(numeric) || 0);
+                        }}
                       />
                     </View>
+                  </View>
 
-                    {/* Form Field 2: Kategori Barang */}
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Kategori Barang</Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
-                      >
-                        {CATEGORIES.map((cat) => {
-                          const isSelected = category === cat;
-                          return (
-                            <TouchableOpacity
-                              key={cat}
-                              activeOpacity={0.8}
-                              style={[
-                                styles.catSelectChip,
-                                isSelected && styles.catSelectChipActive,
-                              ]}
-                              onPress={() => setCategory(cat)}
-                            >
-                              <Text
-                                style={[
-                                  styles.catSelectChipText,
-                                  isSelected && styles.catSelectChipTextActive,
-                                ]}
-                              >
-                                {cat}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
+                  <View style={styles.rowTwoFields}>
+                    <View style={[styles.fieldContainer, { flex: 1.2, marginRight: 12 }]}>
+                      <Text style={styles.fieldLabel}>Stok Tersedia</Text>
+                      <View style={styles.stockCounterRow}>
+                        <TouchableOpacity style={styles.counterBtn} onPress={() => setStock(s => Math.max(0, s - 1))}>
+                          <Ionicons name="remove" size={16} color="#475569" />
+                        </TouchableOpacity>
+                        <TextInput
+                          style={styles.counterInput}
+                          keyboardType="numeric"
+                          value={String(stock)}
+                          onChangeText={(v) => setStock(parseInt(v.replace(/[^0-9]/g, ''), 10) || 0)}
+                        />
+                        <TouchableOpacity style={styles.counterBtn} onPress={() => setStock(s => s + 1)}>
+                          <Ionicons name="add" size={16} color="#475569" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
-                    {/* Form Field 3: Harga Satuan Per Picis (Rp) */}
+                    <View style={[styles.fieldContainer, { flex: 1 }]}>
+                      <Text style={styles.fieldLabel}>Satuan Beli</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+                        {UNIT_OPTIONS.map((u) => (
+                          <TouchableOpacity
+                            key={u}
+                            style={[styles.unitChip, unit === u && styles.unitChipActive]}
+                            onPress={() => setUnit(u)}
+                          >
+                            <Text style={[styles.unitChipText, unit === u && styles.unitChipTextActive]}>{u}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </View>
+
+                  {(unit === 'Dus' || unit === 'Pack') && (
                     <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>
-                        Harga per Picis / Unit (Rp) <Text style={styles.requiredStar}>*</Text>
+                      <Text style={styles.fieldLabel}>Satu {unit} isi berapa Pcs?</Text>
+                      <View style={styles.stockCounterRow}>
+                        <TouchableOpacity style={styles.counterBtn} onPress={() => setPcsPerUnit(s => Math.max(1, s - 1))}>
+                          <Ionicons name="remove" size={16} color="#475569" />
+                        </TouchableOpacity>
+                        <TextInput
+                          style={styles.counterInput}
+                          keyboardType="numeric"
+                          value={String(pcsPerUnit)}
+                          onChangeText={(v) => setPcsPerUnit(parseInt(v.replace(/[^0-9]/g, ''), 10) || 1)}
+                        />
+                        <TouchableOpacity style={styles.counterBtn} onPress={() => setPcsPerUnit(s => s + 1)}>
+                          <Ionicons name="add" size={16} color="#475569" />
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                        Otomatis dikonversi ke {stock * pcsPerUnit} Pcs di inventori.
                       </Text>
-                      <View style={styles.inputPrefixBox}>
-                        <Text style={styles.inputPrefixText}>Rp</Text>
-                        <TextInput
-                          style={styles.prefixedInput}
-                          placeholder="25.000"
-                          placeholderTextColor="#94A3B8"
-                          keyboardType="numeric"
-                          value={priceInput}
-                          onChangeText={(val) => {
-                            const numeric = val.replace(/[^0-9]/g, '');
-                            setPriceInput(numeric);
-                          }}
-                        />
-                      </View>
                     </View>
+                  )}
 
-                    {/* Form Field 4: Stok Awal & Satuan Row */}
-                    <View style={styles.rowTwoFields}>
-                      {/* Stok Awal Counter */}
-                      <View style={[styles.fieldContainer, { flex: 1.2, marginRight: 10 }]}>
-                        <Text style={styles.fieldLabel}>Stok Awal</Text>
-                        <View style={styles.stockCounterRow}>
-                          <TouchableOpacity
-                            style={styles.counterBtn}
-                            onPress={() => setStock((prev) => (prev > 1 ? prev - 1 : 1))}
-                          >
-                            <Ionicons name="remove" size={18} color="#475569" />
-                          </TouchableOpacity>
-                          <TextInput
-                            style={styles.counterInput}
-                            keyboardType="numeric"
-                            value={String(stock)}
-                            onChangeText={(val) => {
-                              const num = parseInt(val.replace(/[^0-9]/g, ''), 10) || 1;
-                              setStock(num);
-                            }}
-                          />
-                          <TouchableOpacity
-                            style={styles.counterBtn}
-                            onPress={() => setStock((prev) => prev + 1)}
-                          >
-                            <Ionicons name="add" size={18} color="#475569" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      {/* Batas Minim Stok Alert */}
-                      <View style={[styles.fieldContainer, { flex: 1 }]}>
-                        <Text style={styles.fieldLabel}>Alert Minim</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="5"
-                          placeholderTextColor="#94A3B8"
-                          keyboardType="numeric"
-                          value={minStockInput}
-                          onChangeText={setMinStockInput}
-                        />
-                      </View>
-                    </View>
-
-                    {/* Form Field 5: Satuan Barang */}
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Satuan Unit</Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 6 }}
-                      >
-                        {UNITS.map((u) => {
-                          const isSelected = unit === u;
-                          return (
-                            <TouchableOpacity
-                              key={u}
-                              activeOpacity={0.8}
-                              style={[
-                                styles.unitChip,
-                                isSelected && styles.unitChipActive,
-                              ]}
-                              onPress={() => setUnit(u)}
-                            >
-                              <Text
-                                style={[
-                                  styles.unitChipText,
-                                  isSelected && styles.unitChipTextActive,
-                                ]}
-                              >
-                                {u}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  </ScrollView>
-
-                  {/* Modal Footer Save Actions */}
                   <View style={styles.modalFooterActions}>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.modalBtnCancel}
-                      onPress={() => setModalVisible(false)}
-                    >
+                    <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setIsModalOpen(false)}>
                       <Text style={styles.modalBtnCancelText}>Batal</Text>
                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.modalBtnSave}
-                      onPress={handleSaveInventory}
-                    >
-                      <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.modalBtnSaveText}>Simpan Barang</Text>
+                    <TouchableOpacity style={styles.modalBtnSave} onPress={handleSaveItem}>
+                      <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.modalBtnSaveText}>Simpan Data</Text>
                     </TouchableOpacity>
                   </View>
-                </View>
-              </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
-          </View>
-        </TouchableWithoutFeedback>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
-      {/* Bottom Navigation Bar */}
+      {/* SALES MODAL (ATUR HARGA JUAL) */}
+      <Modal visible={isSalesModalOpen} animationType="slide" transparent={true} onRequestClose={() => setIsSalesModalOpen(false)}>
+         <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); setIsSalesModalOpen(false); }} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView} pointerEvents="box-none">
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.modalContentCard}>
+                <View style={styles.handleBar} />
+                
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scrollContent}>
+                  <View style={styles.modalHeaderRow}>
+                    <View style={styles.modalHeaderTitleBox}>
+                      <View style={[styles.modalHeaderIconBadge, { backgroundColor: '#E0F2FE' }]}>
+                        <Ionicons name="pricetag-outline" size={20} color="#0284C7" />
+                      </View>
+                      <View>
+                        <Text style={styles.modalTitle}>Atur Harga Jual</Text>
+                        <Text style={styles.modalSubtitle}>{editingItem?.name}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setIsSalesModalOpen(false)}>
+                      <Ionicons name="close" size={24} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.modalDivider} />
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.fieldLabel}>Harga Beli / Modal (Info)</Text>
+                    <View style={[styles.inputPrefixBox, { backgroundColor: '#F1F5F9' }]}>
+                      <Text style={[styles.inputPrefixText, { color: '#64748B' }]}>Rp</Text>
+                      <TextInput
+                        style={[styles.prefixedInput, { color: '#64748B' }]}
+                        value={editingItem ? String(editingItem.price) : '0'}
+                        editable={false}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.fieldLabel}>Harga Jual per Unit (Rp)</Text>
+                    <View style={[styles.inputPrefixBox, { borderColor: '#BAE6FD' }]}>
+                      <Text style={[styles.inputPrefixText, { color: '#0284C7' }]}>Rp</Text>
+                      <TextInput
+                        style={styles.prefixedInput}
+                        placeholder="Contoh: 25.000"
+                        placeholderTextColor="#A1A1AA"
+                        keyboardType="numeric"
+                        value={sellingPriceInput}
+                        onChangeText={(val) => {
+                          const numeric = val.replace(/[^0-9]/g, '');
+                          setSellingPriceInput(numeric);
+                        }}
+                      />
+                    </View>
+                  </View>
+                  
+                  {editingItem && (
+                    <View style={[styles.subtotalCard, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD', marginTop: 10 }]}>
+                      <Text style={[styles.subtotalLabel, { color: '#0369A1' }]}>Potensi Keuntungan per Unit</Text>
+                      <Text style={[styles.subtotalValue, { color: '#0369A1' }]}>
+                        {formatRupiah(Math.max(0, (parseFloat(sellingPriceInput.replace(/[^0-9]/g, '')) || 0) - editingItem.price))}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.modalFooterActions}>
+                    <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setIsSalesModalOpen(false)}>
+                      <Text style={styles.modalBtnCancelText}>Batal</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.modalBtnSave, { backgroundColor: '#0284C7' }]} onPress={handleSaveSales}>
+                      <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.modalBtnSaveText}>Simpan Harga</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* BOTTOM NAV */}
       <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => router.replace('/dashboard')}
-        >
-          <Ionicons name="home-outline" size={26} color="#94A3B8" />
+        <TouchableOpacity activeOpacity={0.7} style={styles.navItem} onPress={() => { setActiveNav('home'); router.replace('/dashboard'); }}>
+          <Ionicons name={activeNav === 'home' ? 'home' : 'home-outline'} size={26} color={activeNav === 'home' ? '#14A39F' : '#94A3B8'} />
         </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => router.replace('/statistics')}
-        >
-          <Ionicons name="stats-chart-outline" size={24} color="#94A3B8" />
+        <TouchableOpacity activeOpacity={0.7} style={styles.navItem} onPress={() => { setActiveNav('chart'); router.replace('/statistics'); }}>
+          <Ionicons name={activeNav === 'chart' ? 'stats-chart' : 'stats-chart-outline'} size={24} color={activeNav === 'chart' ? '#14A39F' : '#94A3B8'} />
         </TouchableOpacity>
-
-        <TouchableOpacity activeOpacity={0.7} style={styles.navItem}>
-          <Ionicons name="card" size={26} color="#14A39F" />
+        <TouchableOpacity activeOpacity={0.7} style={styles.navItem} onPress={() => setActiveNav('wallet')}>
+          <Ionicons name={activeNav === 'wallet' ? 'card' : 'card-outline'} size={26} color={activeNav === 'wallet' ? '#14A39F' : '#94A3B8'} />
         </TouchableOpacity>
       </View>
     </View>
@@ -614,189 +557,82 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  headerContainer: {
-    backgroundColor: '#14A39F',
+  header: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
-    paddingBottom: 20,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
   },
-  headerSafeArea: {
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
-    paddingHorizontal: 20,
-  },
-  headerTopBar: {
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  headerTitleLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 20,
   },
-  backBtn: {
-    padding: 4,
-    marginRight: 6,
-  },
-  headerTitleMeta: {
-    justifyContent: 'center',
-  },
-  headerTitleText: {
-    fontSize: 20,
+  headerTitle: {
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: -0.5,
   },
-  headerSubtitleText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '500',
-  },
-  headerAddBtn: {
+  addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#14A39F',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+    borderRadius: 14,
   },
-  headerAddBtnText: {
-    color: '#14A39F',
-    fontWeight: '800',
-    fontSize: 12,
+  addBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginLeft: 4,
   },
-  metricsGrid: {
+  tabContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 4,
   },
-  metricCard: {
+  tabBtn: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  metricCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  metricIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
+    borderRadius: 12,
   },
-  metricLabel: {
-    fontSize: 10,
+  tabBtnActive: {
+    backgroundColor: '#334155',
+  },
+  tabText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#94A3B8',
   },
-  metricValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  searchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  categoryPillScroll: {
-    marginBottom: 16,
-  },
-  categoryPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  categoryPillActive: {
-    backgroundColor: '#14A39F',
-    borderColor: '#14A39F',
-  },
-  categoryPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  categoryPillTextActive: {
+  tabTextActive: {
     color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  addInlineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  addInlineBtnText: {
-    fontSize: 12,
     fontWeight: '700',
-    color: '#14A39F',
+  },
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 110,
   },
   itemCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
+    marginBottom: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  itemTitleRow: {
+  itemHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -949,25 +785,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-
-  /* POP-UP MODAL STYLES (MATCHES DASHBOARD ORDER MODAL) */
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 18,
+    justifyContent: 'flex-end',
+  },
+  keyboardAvoidingView: {
+    width: '100%',
   },
   modalContentCard: {
-    width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '92%',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
     elevation: 10,
+  },
+  handleBar: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -1113,6 +962,27 @@ const styles = StyleSheet.create({
   unitChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  subtotalCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  subtotalLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    flex: 1,
+  },
+  subtotalValue: {
+    fontSize: 15,
+    fontWeight: '800',
   },
   modalFooterActions: {
     flexDirection: 'row',

@@ -6,10 +6,11 @@ export interface InventoryItem {
   category: string;
   stock: number;
   unit: string;
-  price: number; // Harga per picis (Rp)
+  price: number;
+  sellingPrice: number;
   minStock?: number;
   status: 'Tersedia' | 'Menipis';
-  progress: number; // 0 to 1
+  progress: number;
 }
 
 interface InventoryContextType {
@@ -20,6 +21,7 @@ interface InventoryContextType {
     stock: number;
     unit: string;
     price: number;
+    sellingPrice?: number;
     minStock?: number;
   }) => void;
   updateInventoryItem: (id: string, updatedData: Partial<InventoryItem>) => void;
@@ -32,6 +34,8 @@ interface InventoryContextType {
     unit: string;
     price: number;
   }) => void;
+  updateSellingPrice: (id: string, sellingPrice: number) => void;
+  getProfit: (item: InventoryItem) => number;
 }
 
 const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
@@ -42,6 +46,7 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     stock: 25,
     unit: 'Kg',
     price: 125000,
+    sellingPrice: 175000,
     minStock: 5,
     status: 'Tersedia',
     progress: 0.85,
@@ -53,6 +58,7 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     stock: 40,
     unit: 'Karton',
     price: 18000,
+    sellingPrice: 25000,
     minStock: 10,
     status: 'Tersedia',
     progress: 0.75,
@@ -64,6 +70,7 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     stock: 4,
     unit: 'Pack',
     price: 35000,
+    sellingPrice: 0,
     minStock: 10,
     status: 'Menipis',
     progress: 0.2,
@@ -74,7 +81,8 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     category: 'Minuman',
     stock: 50,
     unit: 'Cup',
-    price: 22000,
+    price: 15000,
+    sellingPrice: 22000,
     minStock: 10,
     status: 'Tersedia',
     progress: 0.9,
@@ -85,7 +93,8 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     category: 'Makanan',
     stock: 30,
     unit: 'Porsi',
-    price: 25000,
+    price: 12000,
+    sellingPrice: 25000,
     minStock: 5,
     status: 'Tersedia',
     progress: 0.7,
@@ -96,7 +105,8 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     category: 'Elektronik',
     stock: 12,
     unit: 'Unit',
-    price: 15000000,
+    price: 12000000,
+    sellingPrice: 15000000,
     minStock: 3,
     status: 'Tersedia',
     progress: 0.9,
@@ -107,7 +117,8 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     category: 'Aksesoris',
     stock: 3,
     unit: 'Unit',
-    price: 250000,
+    price: 180000,
+    sellingPrice: 250000,
     minStock: 5,
     status: 'Menipis',
     progress: 0.25,
@@ -118,7 +129,8 @@ const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     category: 'ATK',
     stock: 50,
     unit: 'Rim',
-    price: 55000,
+    price: 42000,
+    sellingPrice: 55000,
     minStock: 10,
     status: 'Tersedia',
     progress: 0.7,
@@ -136,6 +148,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     stock: number;
     unit: string;
     price: number;
+    sellingPrice?: number;
     minStock?: number;
   }) => {
     const minThreshold = itemData.minStock || 5;
@@ -150,6 +163,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       stock: itemData.stock,
       unit: itemData.unit || 'Pcs',
       price: itemData.price || 0,
+      sellingPrice: itemData.sellingPrice || 0,
       minStock: minThreshold,
       status,
       progress,
@@ -185,7 +199,6 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     setInventoryItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Adjust stock automatically when item is sold (-delta) or restocked (+delta)
   const adjustStockByItemName = (itemName: string, delta: number) => {
     setInventoryItems((prev) =>
       prev.map((item) => {
@@ -208,7 +221,6 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  // Function to either restock an existing item or register a new item in Inventory during Expense entry
   const registerOrRestockExpenseItem = (itemData: {
     name: string;
     category: string;
@@ -222,13 +234,11 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     );
 
     if (existing) {
-      // Item already registered -> Add quantity to its stock
       adjustStockByItemName(existing.name, itemData.quantity);
       if (itemData.price > 0 && itemData.price !== existing.price) {
         updateInventoryItem(existing.id, { price: itemData.price });
       }
     } else {
-      // Item NOT registered -> Register as a new inventory item with initial stock = quantity!
       addInventoryItem({
         name: trimmedName,
         category: itemData.category || 'Bahan Baku',
@@ -240,6 +250,21 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateSellingPrice = (id: string, sellingPrice: number) => {
+    setInventoryItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, sellingPrice } : item
+      )
+    );
+  };
+
+  const getProfit = (item: InventoryItem) => {
+    if (item.sellingPrice > 0 && item.price > 0) {
+      return item.sellingPrice - item.price;
+    }
+    return 0;
+  };
+
   return (
     <InventoryContext.Provider
       value={{
@@ -249,6 +274,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         deleteInventoryItem,
         adjustStockByItemName,
         registerOrRestockExpenseItem,
+        updateSellingPrice,
+        getProfit,
       }}
     >
       {children}

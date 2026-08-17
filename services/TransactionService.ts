@@ -155,4 +155,12 @@ export class TransactionService {
   async getTransactionDetail(id: number | string): Promise<TransactionWithCategory | null> {
     return this.transactionRepo.findById(id);
   }
+
+  async getDebts(): Promise<TransactionWithCategory[]> {
+    return this.transactionRepo.findUnpaidDebts();
+  }
+
+  async markDebtPaid(id: number | string): Promise<void> {
+    await this.transactionRepo.markAsPaid(id);
+  }
 }

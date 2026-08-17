@@ -16,6 +16,7 @@ export interface Transaction {
   reference_number: string | null;
   attachment: string | null;
   description: string | null;
+  customer_name: string | null;
   created_at: string;
   created_by: number | null;
   updated_at: string | null;
@@ -43,5 +44,6 @@ export type CreateTransactionInput = {
   reference_number?: string;
   attachment?: string;
   description?: string;
+  customer_name?: string;
   created_by?: number;
 };

@@ -9,10 +9,12 @@ import {
   SafeAreaView,
   Platform,
   Alert,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
@@ -22,18 +24,12 @@ import { useTransactions } from '@/context/TransactionContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// SVG Area Chart Data URI for Income graph (Teal Theme)
-const INCOME_CHART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTRBMzlGIiBzdG9wLW9wYWNpdHk9IjAuNSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzE0QTM5RiIgc3RvcC1vcGFjaXR5PSIwLjA1Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IEwzNTAsMTAwIEwwLDEwMCBaIiBmaWxsPSJ1cmwoI2dyYWQpIi8+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IiBmaWxsPSJub25lIiBzdHJva2U9IiMxNEEzOUYiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+`;
-
-// SVG Area Chart Data URI for Expense graph (Coral/Salmon Red Theme)
-const EXPENSE_CHART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRSZWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjRkE2QjZDIiBzdG9wLW9wYWNpdHk9IjAuNjUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNGQTZCNkMiIHN0b3Atb3BhY2l0eT0iMC4wNSIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGQ9Ik0wLDgwIEM0MCw5MCA3MCw2MCAxMTAsNjUgQzE1MCw3MCAxODAsOTAgMjIwLDcwIEMyNjAsNTAgMjgwLDY1IDM1MCw1NSBMMzUwLDEwMCBMMCwxMDAgWiIgZmlsbD0idXJsKCNncmFkUmVkKSIvPjxwYXRoIGQ9Ik0wLDgwIEM0MCw5MCA3MCw2MCAxMTAsNjUgQzE1MCw3MCAxODAsOTAgMjIwLDcwIEMyNjAsNTAgMjgwLDY1IDM1MCw1NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkE2QjZDIiBzdHJva2Utd2lkdGg9IjIuNSIvPjwvc3ZnPg==`;
-
-// Watermark Bottle/Device Vector SVG Data URI (Light Blue Silhouette)
 const WATERMARK_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgMTQwIiBmaWxsPSJub25lIj48cGF0aCBkPSJNMjUgMzUgQyAyNSAxMCwgMTM1IDEwLCAxMzUgMzUgTCAxMzUgMTQwIEwgMjUgMTQwIFoiIGZpbGw9IiNFRUY0RkUiLz48cmVjdCB4PSIzMyIgeT0iNTAiIHdpZHRoPSI5NCIgaGVpZ2h0PSI4MCIgcng9IjgiIGZpbGw9IiNGRkZGRkYiLz48Y2lyY2xlIGN4PSI1OCIgY3k9IjkwIiByPSI4IiBmaWxsPSIjRUVGNEZFIi8+PGNpcmNsZSBjeD0iOTgiIGN5PSI5MCIgcj0iOCIgZmlsbD0iI0VFRjRGRSIvPjwvc3ZnPg==`;
 
 interface TransactionItem {
   id: string;
   name: string;
+  customerName: string;
   category: string;
   date: string;
   amount: number;
@@ -50,6 +46,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-1',
     name: 'Maju Jaya Coffee',
+    customerName: 'Admin',
     category: 'Penjualan',
     date: '4 Oktober 2020',
     amount: 2000,
@@ -64,6 +61,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-2',
     name: 'Zeus Motorworks',
+    customerName: 'Admin',
     category: 'Penjualan',
     date: '4 Oktober 2020',
     amount: 4000,
@@ -78,6 +76,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-3',
     name: 'Desain Freelance',
+    customerName: 'Admin',
     category: 'Penjualan',
     date: '4 Oktober 2020',
     amount: 1000,
@@ -92,6 +91,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-4',
     name: 'Uang Kos',
+    customerName: 'Pak Budi',
     category: 'Uang Kos',
     date: '4 Oktober 2020',
     amount: 200,
@@ -106,6 +106,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-5',
     name: 'Netflix',
+    customerName: 'Admin',
     category: 'Operasional',
     date: '4 Oktober 2020',
     amount: 12,
@@ -120,6 +121,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-6',
     name: 'Konsumsi',
+    customerName: 'Admin',
     category: 'Konsumsi',
     date: '4 Oktober 2020',
     amount: 250,
@@ -139,19 +141,19 @@ export default function DashboardScreen() {
   const { db } = useDatabase();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
   
-  const { addTransaction } = useTransactions();
+  const { addTransaction, getDebtTransactions, markDebtAsPaid } = useTransactions();
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
   const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
 
-  // Modal CRUD State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderFormData | null>(null);
+
+  const [isDebtPanelOpen, setIsDebtPanelOpen] = useState(false);
 
   const isIncome = activeTab === 'income';
   const themeAccentColor = isIncome ? '#14A39F' : '#FA6B6C';
 
-  // Compute live balances
   const totalIncome = transactions
     .filter((t) => t.type === 'IN')
     .reduce((sum, t) => sum + t.amount, 0);
@@ -166,11 +168,17 @@ export default function DashboardScreen() {
     isIncome ? t.type === 'IN' : t.type === 'OUT'
   );
 
+  const debtTransactions = getDebtTransactions();
+  const debtCount = debtTransactions.length + transactions.filter((t) => t.paymentMethod === 'Hutang').length;
+
   const formatNumber = (num: number) => {
     return num.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Load from database if initialized
+  const formatRupiah = (num: number) => {
+    return 'Rp ' + num.toLocaleString('id-ID');
+  };
+
   const loadDatabaseData = useCallback(async () => {
     if (!db) return;
     try {
@@ -180,6 +188,7 @@ export default function DashboardScreen() {
         const mapped: TransactionItem[] = dbList.map((t) => ({
           id: String(t.id),
           name: t.description || t.category_name || 'Transaksi',
+          customerName: t.customer_name || 'Admin',
           category: t.category_name || 'Umum',
           date: new Date(t.transaction_date).toLocaleDateString('id-ID', {
             day: 'numeric',
@@ -206,17 +215,16 @@ export default function DashboardScreen() {
     loadDatabaseData();
   }, [loadDatabaseData]);
 
-  // Open modal in Create mode
   const handleOpenAddModal = () => {
     setEditingItem(null);
     setIsModalOpen(true);
   };
 
-  // Open modal in Edit/Delete mode
   const handleEditItem = (item: TransactionItem) => {
     setEditingItem({
       id: item.id,
       name: item.name,
+      customerName: item.customerName,
       category: item.category,
       stock: 25,
       quantity: item.quantity,
@@ -228,7 +236,6 @@ export default function DashboardScreen() {
     setIsModalOpen(true);
   };
 
-  // CREATE or UPDATE CRUD Handler
   const handleSaveOrder = async (formData: OrderFormData) => {
     const totalAmount = formData.price * formData.quantity;
     const now = new Date();
@@ -239,7 +246,6 @@ export default function DashboardScreen() {
     });
 
     if (formData.id) {
-      // UPDATE Operation
       if (db) {
         try {
           const service = new TransactionService(db);
@@ -250,6 +256,7 @@ export default function DashboardScreen() {
             unit_price: formData.price,
             payment_method: formData.paymentMethod,
             description: formData.name,
+            customer_name: formData.customerName,
           });
         } catch (e) {
           console.log('DB Update error fallback:', e);
@@ -262,6 +269,7 @@ export default function DashboardScreen() {
             ? {
                 ...t,
                 name: formData.name,
+                customerName: formData.customerName,
                 category: formData.category,
                 amount: totalAmount,
                 quantity: formData.quantity,
@@ -275,7 +283,6 @@ export default function DashboardScreen() {
 
       Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil diperbarui!`);
     } else {
-      // CREATE Operation
       const newId = `trx-${Date.now()}`;
       if (db) {
         try {
@@ -289,6 +296,7 @@ export default function DashboardScreen() {
             unit_price: formData.price,
             payment_method: formData.paymentMethod,
             description: formData.name,
+            customer_name: formData.customerName,
           });
         } catch (e) {
           console.log('DB Insert error fallback:', e);
@@ -298,6 +306,7 @@ export default function DashboardScreen() {
       const newTrx: TransactionItem = {
         id: newId,
         name: formData.name,
+        customerName: formData.customerName,
         category: formData.category,
         date: dateStr,
         amount: totalAmount,
@@ -310,7 +319,6 @@ export default function DashboardScreen() {
         iconColor: formData.transactionType === 'IN' ? '#EA580C' : '#D97706',
       };
 
-      // Add to Central Transaction Context for Rekap sync
       addTransaction(formData, 'day-sat');
 
       setTransactions((prev) => [newTrx, ...prev]);
@@ -320,7 +328,6 @@ export default function DashboardScreen() {
     setIsModalOpen(false);
   };
 
-  // DELETE CRUD Handler
   const handleDeleteOrder = async (id: string) => {
     if (db) {
       try {
@@ -336,6 +343,47 @@ export default function DashboardScreen() {
     Alert.alert('Terhapus', 'Pesanan telah berhasil dihapus.');
   };
 
+  const handleMarkLocalDebtPaid = (id: string) => {
+    setTransactions((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, paymentMethod: 'Lunas' as const } : t
+      )
+    );
+    markDebtAsPaid(id);
+
+    if (db) {
+      (async () => {
+        try {
+          const service = new TransactionService(db);
+          await service.markDebtPaid(id);
+        } catch (e) {
+          console.log('DB markDebtPaid fallback:', e);
+        }
+      })();
+    }
+
+    Alert.alert('Lunas!', 'Hutang telah ditandai lunas.');
+  };
+
+  const allDebts = [
+    ...transactions.filter((t) => t.paymentMethod === 'Hutang').map((t) => ({
+      id: t.id,
+      customerName: t.customerName,
+      itemName: t.name,
+      amount: t.amount,
+      date: t.date,
+      source: 'local' as const,
+    })),
+    ...debtTransactions.map((t) => ({
+      id: t.id,
+      customerName: t.customerName,
+      itemName: t.name,
+      amount: t.total,
+      date: t.fullDateText,
+      source: 'context' as const,
+    })),
+  ];
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -344,20 +392,28 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + bottomInset }]}
       >
-        {/* Top Header Section (Teal Card) */}
+        {/* Top Header Section */}
         <View style={styles.headerContainer}>
           <SafeAreaView style={styles.headerSafeArea}>
-            {/* Top Bar: Greeting & Notification */}
             <View style={styles.topBar}>
-              <Text style={styles.greetingText}>Halo, Syahrul!</Text>
+              <Text style={styles.greetingText}>Halo, Admin!</Text>
 
-              <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.notificationButton}
+                activeOpacity={0.8}
+                onPress={() => setIsDebtPanelOpen(true)}
+              >
                 <Ionicons name="notifications" size={24} color="#FFFFFF" />
-                <View style={styles.notificationBadge} />
+                {allDebts.length > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {allDebts.length > 9 ? '9+' : allDebts.length}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
 
-            {/* Balance Display */}
             <View style={styles.balanceContainer}>
               <Text style={styles.balanceAmount}>Rp {formatNumber(totalSaldo)}</Text>
               <Text style={styles.balanceLabel}>Total saldo Anda</Text>
@@ -365,7 +421,7 @@ export default function DashboardScreen() {
           </SafeAreaView>
         </View>
 
-        {/* Floating Income / Expense Toggle Card */}
+        {/* Toggle Card */}
         <View style={styles.toggleCardContainer}>
           <View style={styles.toggleCard}>
             <TouchableOpacity
@@ -406,16 +462,14 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Main Body Content */}
+        {/* Body Content */}
         <View style={styles.bodyContent}>
-          {/* Income / Expense Graphic Card (Red for Expense, Teal for Income) */}
           <View
             style={[
               styles.graphicCardOuter,
               { backgroundColor: isIncome ? '#14A39F' : '#FA6B6C' },
             ]}
           >
-            {/* Inner White Card */}
             <TouchableOpacity
               activeOpacity={0.88}
               style={styles.graphicCardInner}
@@ -427,22 +481,15 @@ export default function DashboardScreen() {
                 }
               }}
             >
-              {/* Left Content Row */}
               <View style={styles.graphicCardLeftContent}>
-                {/* Blue Left Vertical Bar Pill */}
                 <View style={styles.bluePillIndicator} />
-
-                {/* Date Day Number */}
                 <Text style={styles.dateNumberText}>13</Text>
-
-                {/* Day Name & Month Year Column */}
                 <View style={styles.dateTextColumn}>
                   <Text style={styles.dayNameText}>Kamis</Text>
                   <Text style={styles.monthYearText}>Agustus 2026</Text>
                 </View>
               </View>
 
-              {/* Right Background Watermark Silhouette */}
               <View style={styles.watermarkContainer} pointerEvents="none">
                 <Image
                   source={{ uri: WATERMARK_SVG_URI }}
@@ -451,12 +498,11 @@ export default function DashboardScreen() {
                 />
               </View>
 
-              {/* Right Chevron Forward Icon */}
               <Ionicons name="chevron-forward" size={24} color="#94A3B8" style={styles.chevronRightIcon} />
             </TouchableOpacity>
           </View>
 
-          {/* Recent Transactions Section */}
+          {/* Recent Transactions */}
           <View style={styles.recentSection}>
             <Text style={styles.recentSectionTitle}>
               {isIncome ? 'Pemasukan terbaru Anda' : 'Pengeluaran terbaru Anda'}
@@ -496,7 +542,9 @@ export default function DashboardScreen() {
                         </View>
                         <View style={styles.transactionMeta}>
                           <Text style={styles.transactionName}>{item.name}</Text>
-                          <Text style={styles.transactionDate}>{item.date}</Text>
+                          <Text style={styles.transactionDate}>
+                            {item.customerName !== 'Admin' ? `${item.customerName} • ` : ''}{item.date}
+                          </Text>
                         </View>
                       </View>
 
@@ -532,7 +580,7 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* Floating Action Button (+) */}
+      {/* FAB */}
       <TouchableOpacity
         activeOpacity={0.85}
         style={[
@@ -548,7 +596,7 @@ export default function DashboardScreen() {
         <Ionicons name="add" size={32} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* Order CRUD Form Modal matching exact user requirement & design */}
+      {/* Order Modal */}
       <OrderModal
         visible={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -558,7 +606,117 @@ export default function DashboardScreen() {
         defaultType={isIncome ? 'IN' : 'OUT'}
       />
 
-      {/* Bottom Navigation Bar */}
+      {/* DEBT NOTIFICATION PANEL MODAL */}
+      <Modal
+        visible={isDebtPanelOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsDebtPanelOpen(false)}
+      >
+        <View style={styles.debtModalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setIsDebtPanelOpen(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+
+          <View style={styles.debtModalContainer}>
+            <View style={styles.debtHandleBar} />
+
+            {/* Header */}
+            <View style={styles.debtHeaderRow}>
+              <View style={styles.debtHeaderLeft}>
+                <View style={styles.debtHeaderIconBadge}>
+                  <Ionicons name="notifications-outline" size={22} color="#D97706" />
+                </View>
+                <View>
+                  <Text style={styles.debtHeaderTitle}>Daftar Hutang</Text>
+                  <Text style={styles.debtHeaderSub}>
+                    {allDebts.length} hutang belum lunas
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.debtCloseBtn}
+                onPress={() => setIsDebtPanelOpen(false)}
+              >
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.debtDivider} />
+
+            {/* Debt List */}
+            <ScrollView
+              style={{ maxHeight: 400 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {allDebts.length === 0 ? (
+                <View style={styles.debtEmptyContainer}>
+                  <Ionicons name="checkmark-circle-outline" size={48} color="#16A34A" />
+                  <Text style={styles.debtEmptyTitle}>Tidak Ada Hutang</Text>
+                  <Text style={styles.debtEmptySub}>
+                    Semua transaksi telah lunas. Bagus!
+                  </Text>
+                </View>
+              ) : (
+                allDebts.map((debt, idx) => (
+                  <View key={`${debt.source}-${debt.id}-${idx}`} style={styles.debtItemCard}>
+                    <View style={styles.debtItemLeft}>
+                      <View style={styles.debtAvatarCircle}>
+                        <Ionicons name="person" size={18} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.debtCustomerName}>{debt.customerName}</Text>
+                        <Text style={styles.debtItemName}>{debt.itemName}</Text>
+                        <Text style={styles.debtDate}>{debt.date}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.debtItemRight}>
+                      <Text style={styles.debtAmount}>{formatRupiah(debt.amount)}</Text>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        style={styles.markPaidBtn}
+                        onPress={() => {
+                          Alert.alert(
+                            'Tandai Lunas',
+                            `Tandai hutang "${debt.customerName}" untuk "${debt.itemName}" sebagai lunas?`,
+                            [
+                              { text: 'Batal', style: 'cancel' },
+                              {
+                                text: 'Ya, Lunas',
+                                onPress: () => {
+                                  handleMarkLocalDebtPaid(debt.id);
+                                  if (debt.source === 'context') {
+                                    markDebtAsPaid(debt.id);
+                                  }
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.markPaidBtnText}>Tandai Lunas</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {allDebts.length > 0 && (
+              <View style={styles.debtTotalRow}>
+                <Text style={styles.debtTotalLabel}>Total Hutang</Text>
+                <Text style={styles.debtTotalValue}>
+                  {formatRupiah(allDebts.reduce((sum, d) => sum + d.amount, 0))}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bottom Nav */}
       <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
         <TouchableOpacity
           activeOpacity={0.7}
@@ -641,14 +799,22 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#EF4444',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#14A39F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  notificationBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   balanceContainer: {
     alignItems: 'center',
@@ -824,6 +990,7 @@ const styles = StyleSheet.create({
   transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   avatarCircle: {
     width: 44,
@@ -848,6 +1015,7 @@ const styles = StyleSheet.create({
   },
   transactionMeta: {
     justifyContent: 'center',
+    flex: 1,
   },
   transactionName: {
     fontSize: 15,
@@ -938,5 +1106,171 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 8,
+  },
+
+  debtModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  debtModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '80%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  debtHandleBar: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  debtHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  debtHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  debtHeaderIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  debtHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  debtHeaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  debtCloseBtn: {
+    padding: 4,
+  },
+  debtDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 14,
+  },
+  debtEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  debtEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#16A34A',
+    marginTop: 12,
+  },
+  debtEmptySub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 4,
+  },
+  debtItemCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  debtItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  debtAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  debtCustomerName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  debtItemName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78716C',
+    marginTop: 1,
+  },
+  debtDate: {
+    fontSize: 10,
+    color: '#A8A29E',
+    marginTop: 2,
+  },
+  debtItemRight: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+  debtAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D97706',
+    marginBottom: 6,
+  },
+  markPaidBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  markPaidBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  debtTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  debtTotalLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  debtTotalValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#D97706',
   },
 });

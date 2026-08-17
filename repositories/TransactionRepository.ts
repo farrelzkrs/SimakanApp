@@ -147,8 +147,8 @@ export class TransactionRepository {
         transaction_no, transaction_date, transaction_type, 
         category_id, cash_id, item_id, quantity, unit_price, 
         nominal, payment_method, reference_number, attachment, 
-        description, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        description, customer_name, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNo,
         input.transaction_date,
@@ -163,6 +163,7 @@ export class TransactionRepository {
         input.reference_number ?? null,
         input.attachment ?? null,
         input.description ?? null,
+        input.customer_name ?? null,
         validCreatedBy,
       ]
     );
@@ -182,6 +183,7 @@ export class TransactionRepository {
     if (input.nominal !== undefined) { updates.push('nominal = ?'); values.push(input.nominal); }
     if (input.payment_method !== undefined) { updates.push('payment_method = ?'); values.push(input.payment_method); }
     if (input.description !== undefined) { updates.push('description = ?'); values.push(input.description); }
+    if ((input as any).customer_name !== undefined) { updates.push('customer_name = ?'); values.push((input as any).customer_name); }
 
     if (updates.length === 0) return;
 
@@ -261,5 +263,22 @@ export class TransactionRepository {
     const sequence = String(count).padStart(3, '0');
 
     return `${prefix}-${dateStr}-${sequence}`;
+  }
+
+  async findUnpaidDebts(): Promise<TransactionWithCategory[]> {
+    return this.db.getAllAsync<TransactionWithCategory>(
+      `SELECT t.*, c.name as category_name, c.icon as category_icon, c.color as category_color 
+       FROM transactions t 
+       LEFT JOIN categories c ON t.category_id = c.id 
+       WHERE t.payment_method = 'Hutang' AND t.is_deleted = 0 
+       ORDER BY t.transaction_date DESC`
+    );
+  }
+
+  async markAsPaid(id: number | string): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE transactions SET payment_method = 'Lunas', updated_at = ? WHERE id = ?`,
+      [toSQLiteDateTime(), id]
+    );
   }
 }

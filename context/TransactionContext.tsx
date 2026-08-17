@@ -4,6 +4,7 @@ import { OrderFormData } from '@/components/OrderModal';
 export interface TransactionItem {
   id: string;
   name: string;
+  customerName: string;
   category: string;
   quantity: number;
   unit: string;
@@ -11,10 +12,10 @@ export interface TransactionItem {
   total: number;
   paymentMethod: 'Lunas' | 'Hutang';
   transactionType: 'IN' | 'OUT';
-  monthKey: string; // e.g. "2026-08"
-  weekKey: string;  // e.g. "W1", "W2", "W3", "W4", "W5"
-  dateKey: string;  // e.g. "2026-08-15"
-  dayId: string;    // e.g. "day-sat", "day-wed"
+  monthKey: string;
+  weekKey: string;
+  dateKey: string;
+  dayId: string;
   fullDateText: string;
   timeText: string;
   timestamp: number;
@@ -26,14 +27,15 @@ interface TransactionContextType {
   deleteTransaction: (id: string) => void;
   getTransactionsByDay: (dayId: string, type?: 'IN' | 'OUT') => TransactionItem[];
   getTotalByType: (type: 'IN' | 'OUT', dayId?: string) => number;
+  getDebtTransactions: () => TransactionItem[];
+  markDebtAsPaid: (id: string) => void;
 }
 
 const INITIAL_TRANSACTIONS: TransactionItem[] = [
-  // --- AGUSTUS 2026: MINGGU KE-3 (15 - 21 Ags) ---
-  // Sabtu, 15 Agustus 2026 (Pemasukan)
   {
     id: 'trx-inc-1',
     name: 'Kopi Susu Aren Special',
+    customerName: 'Admin',
     category: 'Minuman',
     quantity: 15,
     unit: 'Cup',
@@ -52,6 +54,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-inc-2',
     name: 'Roti Bakar Keju Cokelat',
+    customerName: 'Admin',
     category: 'Makanan',
     quantity: 8,
     unit: 'Porsi',
@@ -70,6 +73,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-inc-7',
     name: 'Croissant Butter Warm',
+    customerName: 'Admin',
     category: 'Snack',
     quantity: 12,
     unit: 'Pcs',
@@ -85,10 +89,10 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '16:45 WIB',
     timestamp: new Date('2026-08-15T16:45:00').getTime(),
   },
-  // Sabtu, 15 Agustus 2026 (Pengeluaran)
   {
     id: 'trx-exp-1',
     name: 'Biji Kopi Arabika Gayo 1kg',
+    customerName: 'Admin',
     category: 'Bahan Baku',
     quantity: 2,
     unit: 'Kg',
@@ -107,6 +111,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-2',
     name: 'Susu UHT Full Cream 1L',
+    customerName: 'Admin',
     category: 'Bahan Baku',
     quantity: 10,
     unit: 'Karton',
@@ -122,11 +127,10 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '10:00 WIB',
     timestamp: new Date('2026-08-15T10:00:00').getTime(),
   },
-
-  // Jumat, 14 Agustus 2026 (W2/W3 border)
   {
     id: 'trx-inc-8',
     name: 'Matcha Latte Ice',
+    customerName: 'Admin',
     category: 'Minuman',
     quantity: 14,
     unit: 'Cup',
@@ -145,6 +149,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-4',
     name: 'Sirup Karamel 750ml',
+    customerName: 'Admin',
     category: 'Bahan Baku',
     quantity: 3,
     unit: 'Botol',
@@ -160,12 +165,10 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '11:20 WIB',
     timestamp: new Date('2026-08-14T11:20:00').getTime(),
   },
-
-  // --- AGUSTUS 2026: MINGGU KE-2 (08 - 14 Ags) ---
-  // Rabu, 12 Agustus 2026
   {
     id: 'trx-inc-3',
     name: 'Espresso Double Shot',
+    customerName: 'Admin',
     category: 'Minuman',
     quantity: 10,
     unit: 'Cup',
@@ -184,6 +187,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-inc-4',
     name: 'Nasi Goreng Spesial Telur',
+    customerName: 'Admin',
     category: 'Makanan',
     quantity: 6,
     unit: 'Porsi',
@@ -202,6 +206,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-3',
     name: 'Cup Plastik Sablon 16oz',
+    customerName: 'Pak Budi',
     category: 'Kemasan',
     quantity: 5,
     unit: 'Pack',
@@ -217,11 +222,10 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '13:45 WIB',
     timestamp: new Date('2026-08-12T13:45:00').getTime(),
   },
-
-  // Senin, 10 Agustus 2026
   {
     id: 'trx-inc-5',
     name: 'Caramel Macchiato Large',
+    customerName: 'Admin',
     category: 'Minuman',
     quantity: 8,
     unit: 'Cup',
@@ -240,6 +244,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-5',
     name: 'Gas Elpiji 12kg',
+    customerName: 'Admin',
     category: 'Operasional',
     quantity: 1,
     unit: 'Tabung',
@@ -255,12 +260,10 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '08:45 WIB',
     timestamp: new Date('2026-08-10T08:45:00').getTime(),
   },
-
-  // --- AGUSTUS 2026: MINGGU KE-1 (01 - 07 Ags) ---
-  // Selasa, 04 Agustus 2026
   {
     id: 'trx-inc-6',
     name: 'Americano Ice Segar',
+    customerName: 'Admin',
     category: 'Minuman',
     quantity: 12,
     unit: 'Cup',
@@ -279,6 +282,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-6',
     name: 'Sedotan Steril & Tissue Paper',
+    customerName: 'Admin',
     category: 'Kemasan',
     quantity: 4,
     unit: 'Pack',
@@ -294,11 +298,10 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '11:00 WIB',
     timestamp: new Date('2026-08-04T11:00:00').getTime(),
   },
-
-  // --- JULI 2026 SAMPLE DATA ---
   {
     id: 'trx-inc-jul-1',
     name: 'Ice Lemon Tea Jumbo',
+    customerName: 'Admin',
     category: 'Minuman',
     quantity: 20,
     unit: 'Cup',
@@ -317,6 +320,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-jul-1',
     name: 'Listrik & Token PLN Juli',
+    customerName: 'Admin',
     category: 'Operasional',
     quantity: 1,
     unit: 'Bulan',
@@ -348,7 +352,6 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     const now = customDate || new Date();
     const timeText = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
     
-    // Format full date text
     const fullDateText = now.toLocaleDateString('id-ID', {
       weekday: 'long',
       day: 'numeric',
@@ -372,6 +375,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     const newTrx: TransactionItem = {
       id: 'trx-' + Date.now(),
       name: data.name,
+      customerName: data.customerName || 'Admin',
       category: data.category || 'Umum',
       quantity: qty,
       unit: data.unit || 'Pcs',
@@ -409,6 +413,18 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       .reduce((acc, curr) => acc + curr.total, 0);
   };
 
+  const getDebtTransactions = () => {
+    return transactions.filter((t) => t.paymentMethod === 'Hutang');
+  };
+
+  const markDebtAsPaid = (id: string) => {
+    setTransactions((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, paymentMethod: 'Lunas' as const } : t
+      )
+    );
+  };
+
   return (
     <TransactionContext.Provider
       value={{
@@ -417,6 +433,8 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
         deleteTransaction,
         getTransactionsByDay,
         getTotalByType,
+        getDebtTransactions,
+        markDebtAsPaid,
       }}
     >
       {children}
@@ -431,4 +449,3 @@ export function useTransactions() {
   }
   return context;
 }
-
