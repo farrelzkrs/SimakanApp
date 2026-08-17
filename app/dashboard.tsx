@@ -184,6 +184,9 @@ export default function DashboardScreen() {
     isIncome ? t.type === 'IN' : t.type === 'OUT'
   );
 
+  const MAX_RECENT_ITEMS = 5;
+  const displayedTransactions = filteredTransactions.slice(0, MAX_RECENT_ITEMS);
+
   const formatNumber = (num: number) => {
     return num.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
@@ -500,74 +503,116 @@ export default function DashboardScreen() {
 
           {/* Recent Transactions Section */}
           <View style={styles.recentSection}>
-            <Text style={styles.recentSectionTitle}>
-              {isIncome ? 'Pemasukan terbaru Anda' : 'Pengeluaran terbaru Anda'}
-            </Text>
+            <View style={styles.recentSectionHeaderRow}>
+              <Text style={styles.recentSectionTitle}>
+                {isIncome ? 'Pemasukan terbaru Anda' : 'Pengeluaran terbaru Anda'}
+              </Text>
+              {filteredTransactions.length > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (isIncome) {
+                      router.push('/rekap-pemasukan');
+                    } else {
+                      router.push('/rekap-pengeluaran');
+                    }
+                  }}
+                >
+                  <Text style={[styles.recentViewAllLink, { color: themeAccentColor }]}>
+                    Rekap ({filteredTransactions.length}) ➔
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             <View style={styles.transactionCard}>
-              {filteredTransactions.length === 0 ? (
+              {displayedTransactions.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="document-text-outline" size={32} color="#94A3B8" />
                   <Text style={styles.emptyText}>Belum ada data {isIncome ? 'pemasukan' : 'pengeluaran'}</Text>
                 </View>
               ) : (
-                filteredTransactions.map((item, index) => (
-                  <React.Fragment key={item.id}>
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      style={styles.transactionItem}
-                      onPress={() => handleEditItem(item)}
-                    >
-                      <View style={styles.transactionLeft}>
-                        <View style={[styles.avatarCircle, { backgroundColor: item.bgColor }]}>
-                          <Ionicons name={item.icon as any} size={22} color={item.iconColor} />
+                <>
+                  {displayedTransactions.map((item, index) => (
+                    <React.Fragment key={item.id}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.transactionItem}
+                        onPress={() => handleEditItem(item)}
+                      >
+                        <View style={styles.transactionLeft}>
+                          <View style={[styles.avatarCircle, { backgroundColor: item.bgColor }]}>
+                            <Ionicons name={item.icon as any} size={22} color={item.iconColor} />
+                            {item.paymentMethod === 'Hutang' ? (
+                              <View style={[styles.arrowBadge, { backgroundColor: '#EAB308' }]}>
+                                <Ionicons name="time" size={10} color="#FFFFFF" />
+                              </View>
+                            ) : (
+                              <View style={[styles.arrowBadge, { backgroundColor: themeAccentColor }]}>
+                                <Ionicons
+                                  name="arrow-up"
+                                  size={10}
+                                  color="#FFFFFF"
+                                  style={!isIncome ? { transform: [{ rotate: '45deg' }] } : undefined}
+                                />
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.transactionMeta}>
+                            <Text style={styles.transactionName}>{item.name}</Text>
+                            <Text style={styles.transactionDate}>{item.date}</Text>
+                          </View>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text
+                            style={[
+                              styles.transactionAmount,
+                              item.paymentMethod === 'Hutang' && styles.hutangAmountText,
+                            ]}
+                          >
+                            Rp {formatNumber(item.amount)}
+                          </Text>
                           {item.paymentMethod === 'Hutang' ? (
-                            <View style={[styles.arrowBadge, { backgroundColor: '#EAB308' }]}>
-                              <Ionicons name="time" size={10} color="#FFFFFF" />
+                            <View style={styles.hutangBadge}>
+                              <Ionicons name="time" size={10} color="#B45309" style={{ marginRight: 3 }} />
+                              <Text style={styles.hutangBadgeText}>Hutang</Text>
                             </View>
                           ) : (
-                            <View style={[styles.arrowBadge, { backgroundColor: themeAccentColor }]}>
-                              <Ionicons
-                                name="arrow-up"
-                                size={10}
-                                color="#FFFFFF"
-                                style={!isIncome ? { transform: [{ rotate: '45deg' }] } : undefined}
-                              />
+                            <View style={styles.lunasBadge}>
+                              <Ionicons name="checkmark-circle" size={10} color="#15803D" style={{ marginRight: 3 }} />
+                              <Text style={styles.lunasBadgeText}>Lunas</Text>
                             </View>
                           )}
                         </View>
-                        <View style={styles.transactionMeta}>
-                          <Text style={styles.transactionName}>{item.name}</Text>
-                          <Text style={styles.transactionDate}>{item.date}</Text>
-                        </View>
-                      </View>
+                      </TouchableOpacity>
 
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text
-                          style={[
-                            styles.transactionAmount,
-                            item.paymentMethod === 'Hutang' && styles.hutangAmountText,
-                          ]}
-                        >
-                          Rp {formatNumber(item.amount)}
+                      {index < displayedTransactions.length - 1 && <View style={styles.divider} />}
+                    </React.Fragment>
+                  ))}
+
+                  {/* View All Button if more than MAX_RECENT_ITEMS */}
+                  {filteredTransactions.length > MAX_RECENT_ITEMS && (
+                    <>
+                      <View style={styles.divider} />
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.viewMoreButton}
+                        onPress={() => {
+                          if (isIncome) {
+                            router.push('/rekap-pemasukan');
+                          } else {
+                            router.push('/rekap-pengeluaran');
+                          }
+                        }}
+                      >
+                        <Text style={[styles.viewMoreText, { color: themeAccentColor }]}>
+                          Lihat Semua ({filteredTransactions.length} {isIncome ? 'Pemasukan' : 'Pengeluaran'}) ➔
                         </Text>
-                        {item.paymentMethod === 'Hutang' ? (
-                          <View style={styles.hutangBadge}>
-                            <Ionicons name="time" size={10} color="#B45309" style={{ marginRight: 3 }} />
-                            <Text style={styles.hutangBadgeText}>Hutang</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.lunasBadge}>
-                            <Ionicons name="checkmark-circle" size={10} color="#15803D" style={{ marginRight: 3 }} />
-                            <Text style={styles.lunasBadgeText}>Lunas</Text>
-                          </View>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-
-                    {index < filteredTransactions.length - 1 && <View style={styles.divider} />}
-                  </React.Fragment>
-                ))
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </>
               )}
             </View>
           </View>
@@ -836,11 +881,29 @@ const styles = StyleSheet.create({
   recentSection: {
     marginBottom: 20,
   },
-  recentSectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
+  recentSectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 14,
+  },
+  recentSectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  recentViewAllLink: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  viewMoreButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewMoreText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
   transactionCard: {
     backgroundColor: '#FFFFFF',
