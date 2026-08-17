@@ -22,12 +22,34 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type DebtFilterType = 'ALL' | 'UNPAID' | 'PAID' | 'INCOME_DEBT' | 'EXPENSE_DEBT';
 
+interface DebtorGroup {
+  key: string;
+  debtorName: string;
+  avatarInitial: string;
+  items: TransactionItem[];
+  totalAmount: number;
+  unpaidAmount: number;
+  paidAmount: number;
+  unpaidCount: number;
+  paidCount: number;
+  hasUnpaid: boolean;
+  hasIncomeDebt: boolean;
+  hasExpenseDebt: boolean;
+  latestTimestamp: number;
+}
+
 export default function StatisticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
-  const { transactions, toggleDebtStatus, deleteTransaction, addTransaction } = useTransactions();
+  const {
+    transactions,
+    toggleDebtStatus,
+    settleAllDebtsForPerson,
+    deleteTransaction,
+    addTransaction,
+  } = useTransactions();
 
   const [activeNav, setActiveNav] = useState<'home' | 'debt' | 'wallet'>('debt');
   const [activeFilter, setActiveFilter] = useState<DebtFilterType>('ALL');
@@ -35,21 +57,78 @@ export default function StatisticsScreen() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderFormData | null>(null);
 
-  // Extract all transactions that have paymentMethod === 'Hutang' OR have debtorName
+  // Expanded debtor groups map (key: boolean)
+  const [expandedDebtorKeys, setExpandedDebtorKeys] = useState<Record<string, boolean>>({});
+
+  // Extract all transactions that are debts or have debtorName
   const allDebtTransactions = useMemo(() => {
     return transactions.filter(
       (t) => t.paymentMethod === 'Hutang' || !!t.debtorName || t.debtStatus === 'Belum Lunas'
     );
   }, [transactions]);
 
-  // Aggregate Metrics
+  // Aggregate Debtor Groups (Grouped by Debtor Name)
+  const groupedDebtors = useMemo<DebtorGroup[]>(() => {
+    const map = new Map<string, DebtorGroup>();
+
+    allDebtTransactions.forEach((t) => {
+      const rawName = (t.debtorName || 'Pelanggan Tanpa Nama').trim();
+      const normKey = rawName.toLowerCase();
+      const isUnpaid = t.debtStatus === 'Belum Lunas' || (!t.debtStatus && t.paymentMethod === 'Hutang');
+
+      if (!map.has(normKey)) {
+        const initial = rawName.charAt(0).toUpperCase() || 'H';
+        map.set(normKey, {
+          key: normKey,
+          debtorName: rawName,
+          avatarInitial: initial,
+          items: [],
+          totalAmount: 0,
+          unpaidAmount: 0,
+          paidAmount: 0,
+          unpaidCount: 0,
+          paidCount: 0,
+          hasUnpaid: false,
+          hasIncomeDebt: false,
+          hasExpenseDebt: false,
+          latestTimestamp: t.timestamp || 0,
+        });
+      }
+
+      const grp = map.get(normKey)!;
+      grp.items.push(t);
+      grp.totalAmount += t.total;
+      if (isUnpaid) {
+        grp.unpaidAmount += t.total;
+        grp.unpaidCount += 1;
+        grp.hasUnpaid = true;
+      } else {
+        grp.paidAmount += t.total;
+        grp.paidCount += 1;
+      }
+      if (t.transactionType === 'IN') grp.hasIncomeDebt = true;
+      if (t.transactionType === 'OUT') grp.hasExpenseDebt = true;
+      if ((t.timestamp || 0) > grp.latestTimestamp) {
+        grp.latestTimestamp = t.timestamp || 0;
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      // Prioritize groups with unpaid debts first, then latest timestamp
+      if (a.hasUnpaid && !b.hasUnpaid) return -1;
+      if (!a.hasUnpaid && b.hasUnpaid) return 1;
+      return b.latestTimestamp - a.latestTimestamp;
+    });
+  }, [allDebtTransactions]);
+
+  // Aggregate Screen Metrics
   const metrics = useMemo(() => {
     let unpaidTotal = 0;
     let unpaidCount = 0;
     let paidTotal = 0;
     let paidCount = 0;
-    let customerReceivableTotal = 0; // Piutang Pemasukan (IN) belum lunas
-    let supplierDebtTotal = 0; // Hutang Pengeluaran (OUT) belum lunas
+    let customerReceivableTotal = 0;
+    let supplierDebtTotal = 0;
 
     allDebtTransactions.forEach((t) => {
       if (t.debtStatus === 'Belum Lunas' || (!t.debtStatus && t.paymentMethod === 'Hutang')) {
@@ -73,50 +152,54 @@ export default function StatisticsScreen() {
       paidCount,
       customerReceivableTotal,
       supplierDebtTotal,
+      totalPersons: groupedDebtors.length,
       totalRecords: allDebtTransactions.length,
     };
-  }, [allDebtTransactions]);
+  }, [allDebtTransactions, groupedDebtors]);
 
-  // Filtered List based on Search & Active Filter Tab
-  const filteredDebts = useMemo(() => {
-    return allDebtTransactions.filter((t) => {
-      const isUnpaid = t.debtStatus === 'Belum Lunas' || (!t.debtStatus && t.paymentMethod === 'Hutang');
-      const isPaid = t.debtStatus === 'Lunas';
+  // Filtered Debtor Groups based on Search & Active Filter Tab
+  const filteredDebtorGroups = useMemo(() => {
+    return groupedDebtors.filter((grp) => {
+      // 1. Filter Tab
+      if (activeFilter === 'UNPAID' && !grp.hasUnpaid) return false;
+      if (activeFilter === 'PAID' && grp.hasUnpaid) return false;
+      if (activeFilter === 'INCOME_DEBT' && !grp.hasIncomeDebt) return false;
+      if (activeFilter === 'EXPENSE_DEBT' && !grp.hasExpenseDebt) return false;
 
-      // 1. Tab Filter
-      if (activeFilter === 'UNPAID' && !isUnpaid) return false;
-      if (activeFilter === 'PAID' && !isPaid) return false;
-      if (activeFilter === 'INCOME_DEBT' && t.transactionType !== 'IN') return false;
-      if (activeFilter === 'EXPENSE_DEBT' && t.transactionType !== 'OUT') return false;
-
-      // 2. Search Query (Name of debtor, item name, or category)
+      // 2. Search Query (Name of debtor, item name, or category inside the group)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchDebtor = (t.debtorName || '').toLowerCase().includes(q);
-        const matchItem = t.name.toLowerCase().includes(q);
-        const matchCategory = t.category.toLowerCase().includes(q);
-        return matchDebtor || matchItem || matchCategory;
+        const matchDebtor = grp.debtorName.toLowerCase().includes(q);
+        const matchItem = grp.items.some(
+          (i) => i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q)
+        );
+        return matchDebtor || matchItem;
       }
 
       return true;
     });
-  }, [allDebtTransactions, activeFilter, searchQuery]);
+  }, [groupedDebtors, activeFilter, searchQuery]);
 
   const formatRupiah = (num: number) => {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
 
-  const handleToggleStatus = (item: TransactionItem) => {
+  const toggleExpandDebtor = (key: string) => {
+    setExpandedDebtorKeys((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleToggleItemStatus = (item: TransactionItem, personName: string) => {
     const isCurrentlyUnpaid =
       item.debtStatus === 'Belum Lunas' || (!item.debtStatus && item.paymentMethod === 'Hutang');
 
     Alert.alert(
       isCurrentlyUnpaid ? 'Konfirmasi Pelunasan' : 'Ubah ke Belum Lunas',
       isCurrentlyUnpaid
-        ? `Tandai hutang/piutang "${item.debtorName || item.name}" sebesar ${formatRupiah(
-            item.total
-          )} sebagai LUNAS?`
-        : `Kembalikan status hutang "${item.debtorName || item.name}" menjadi BELUM LUNAS?`,
+        ? `Tandai tagihan "${item.name}" (${formatRupiah(item.total)}) dari ${personName} sebagai LUNAS?`
+        : `Kembalikan status tagihan "${item.name}" menjadi BELUM LUNAS?`,
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -127,7 +210,7 @@ export default function StatisticsScreen() {
             Alert.alert(
               'Berhasil',
               isCurrentlyUnpaid
-                ? `Hutang "${item.debtorName || item.name}" berhasil dilunasi!`
+                ? `Tagihan "${item.name}" berhasil dilunasi!`
                 : `Status diubah kembali ke Belum Lunas.`
             );
           },
@@ -136,8 +219,28 @@ export default function StatisticsScreen() {
     );
   };
 
-  const handleDeleteDebt = (id: string, name: string) => {
-    Alert.alert('Hapus Catatan Hutang', `Yakin ingin menghapus catatan hutang "${name}"?`, [
+  const handleSettleAllForPerson = (grp: DebtorGroup) => {
+    Alert.alert(
+      'Lunasi Semua Tagihan',
+      `Apakah Anda yakin ingin menandai SEMUA ${grp.unpaidCount} tagihan dari "${grp.debtorName}" (Total: ${formatRupiah(
+        grp.unpaidAmount
+      )}) sebagai LUNAS?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Lunasi Semua',
+          style: 'default',
+          onPress: () => {
+            settleAllDebtsForPerson(grp.debtorName);
+            Alert.alert('Berhasil', `Semua hutang atas nama "${grp.debtorName}" telah lunas!`);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteItem = (id: string, name: string) => {
+    Alert.alert('Hapus Transaksi', `Yakin ingin menghapus catatan tagihan "${name}"?`, [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Hapus',
@@ -160,13 +263,15 @@ export default function StatisticsScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Top Banner Header (Teal with Navy Gradient Feel) */}
+      {/* Top Banner Header */}
       <View style={styles.topHeaderBackground}>
         <SafeAreaView style={styles.headerSafeArea}>
           <View style={styles.headerRow}>
             <View style={styles.headerTitleContainer}>
               <Text style={styles.headerTitle}>Daftar Hutang</Text>
-              <Text style={styles.headerSubtitle}>Catatan Piutang Pelanggan & Hutang Toko</Text>
+              <Text style={styles.headerSubtitle}>
+                {metrics.totalPersons} Orang • {metrics.unpaidCount} Tagihan Belum Lunas
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -208,37 +313,40 @@ export default function StatisticsScreen() {
                 <Ionicons name="time" size={18} color="#D97706" />
               </View>
               <View style={styles.badgeAmber}>
-                <Text style={styles.badgeAmberText}>{metrics.unpaidCount} Transaksi</Text>
+                <Text style={styles.badgeAmberText}>{metrics.unpaidCount} Tagihan Belum Lunas</Text>
               </View>
             </View>
-            <Text style={styles.metricLabel}>Total Belum Lunas</Text>
+            <Text style={styles.metricLabel}>Total Hutang Belum Lunas</Text>
             <Text style={styles.metricValueAmber}>{formatRupiah(metrics.unpaidTotal)}</Text>
           </View>
 
-          {/* Card 2: Piutang Pelanggan (Pemasukan Belum Lunas) */}
-          <View style={styles.metricCardSub}>
-            <View style={styles.metricCardHeader}>
-              <View style={[styles.iconCircleMini, { backgroundColor: '#F0FDFA' }]}>
-                <Ionicons name="arrow-down-circle" size={16} color="#14A39F" />
+          {/* Card 2: Piutang Pelanggan vs Hutang Toko Row */}
+          <View style={styles.subMetricsRow}>
+            {/* Piutang Pelanggan (IN) */}
+            <View style={[styles.metricCardSub, { flex: 1, marginRight: 8 }]}>
+              <View style={styles.metricCardHeaderMini}>
+                <View style={[styles.iconCircleMini, { backgroundColor: '#F0FDFA' }]}>
+                  <Ionicons name="arrow-down-circle" size={14} color="#14A39F" />
+                </View>
+                <Text style={styles.metricSubTag}>Piutang (IN)</Text>
               </View>
-              <Text style={styles.metricSubTag}>Piutang Pelanggan</Text>
+              <Text style={styles.metricValueMini}>{formatRupiah(metrics.customerReceivableTotal)}</Text>
+              <Text style={styles.metricSubHint}>Pemasukan kasbon</Text>
             </View>
-            <Text style={styles.metricValueMini}>{formatRupiah(metrics.customerReceivableTotal)}</Text>
-            <Text style={styles.metricSubHint}>Pemasukan belum dibayar</Text>
-          </View>
 
-          {/* Card 3: Hutang Toko (Pengeluaran Belum Lunas) */}
-          <View style={styles.metricCardSub}>
-            <View style={styles.metricCardHeader}>
-              <View style={[styles.iconCircleMini, { backgroundColor: '#FEF2F2' }]}>
-                <Ionicons name="arrow-up-circle" size={16} color="#DC2626" />
+            {/* Hutang Toko (OUT) */}
+            <View style={[styles.metricCardSub, { flex: 1 }]}>
+              <View style={styles.metricCardHeaderMini}>
+                <View style={[styles.iconCircleMini, { backgroundColor: '#FEF2F2' }]}>
+                  <Ionicons name="arrow-up-circle" size={14} color="#DC2626" />
+                </View>
+                <Text style={styles.metricSubTag}>Hutang (OUT)</Text>
               </View>
-              <Text style={styles.metricSubTag}>Hutang Toko</Text>
+              <Text style={[styles.metricValueMini, { color: '#DC2626' }]}>
+                {formatRupiah(metrics.supplierDebtTotal)}
+              </Text>
+              <Text style={styles.metricSubHint}>Kewajiban toko</Text>
             </View>
-            <Text style={[styles.metricValueMini, { color: '#DC2626' }]}>
-              {formatRupiah(metrics.supplierDebtTotal)}
-            </Text>
-            <Text style={styles.metricSubHint}>Kewajiban belanja toko</Text>
           </View>
         </View>
 
@@ -247,7 +355,7 @@ export default function StatisticsScreen() {
           <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchBarInput}
-            placeholder="Cari nama penghutang / nama barang..."
+            placeholder="Cari nama orang / nama barang hutang..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -271,7 +379,7 @@ export default function StatisticsScreen() {
             onPress={() => setActiveFilter('ALL')}
           >
             <Text style={[styles.filterChipText, activeFilter === 'ALL' && styles.filterChipTextActive]}>
-              Semua ({metrics.totalRecords})
+              Semua ({metrics.totalPersons} Orang)
             </Text>
           </TouchableOpacity>
 
@@ -292,7 +400,7 @@ export default function StatisticsScreen() {
                 activeFilter === 'UNPAID' && styles.filterChipTextActive,
               ]}
             >
-              Belum Lunas ({metrics.unpaidCount})
+              Belum Lunas ({groupedDebtors.filter((g) => g.hasUnpaid).length})
             </Text>
           </TouchableOpacity>
 
@@ -313,7 +421,7 @@ export default function StatisticsScreen() {
                 activeFilter === 'PAID' && styles.filterChipTextActive,
               ]}
             >
-              Sudah Lunas ({metrics.paidCount})
+              Semua Lunas ({groupedDebtors.filter((g) => !g.hasUnpaid).length})
             </Text>
           </TouchableOpacity>
 
@@ -350,158 +458,245 @@ export default function StatisticsScreen() {
 
         {/* Section Header */}
         <View style={styles.listHeaderRow}>
-          <Text style={styles.listHeaderTitle}>Daftar Tagihan ({filteredDebts.length})</Text>
-          <Text style={styles.listHeaderSub}>Tekan 'Tandai Lunas' saat tagihan terbayar</Text>
+          <Text style={styles.listHeaderTitle}>
+            Daftar Orang Berhutang ({filteredDebtorGroups.length})
+          </Text>
+          <Text style={styles.listHeaderSub}>Tekan kartu untuk melihat rincian transaksi</Text>
         </View>
 
-        {/* Debt Cards List */}
-        {filteredDebts.length > 0 ? (
-          filteredDebts.map((item) => {
-            const isUnpaid =
-              item.debtStatus === 'Belum Lunas' || (!item.debtStatus && item.paymentMethod === 'Hutang');
-            const debtorInitial = (item.debtorName || item.name).trim().charAt(0).toUpperCase() || 'H';
-            const isIncome = item.transactionType === 'IN';
+        {/* Grouped Debtor Accordion Cards List */}
+        {filteredDebtorGroups.length > 0 ? (
+          filteredDebtorGroups.map((grp) => {
+            const isExpanded = !!expandedDebtorKeys[grp.key];
 
             return (
               <View
-                key={item.id}
-                style={[styles.debtCard, isUnpaid ? styles.debtCardUnpaid : styles.debtCardPaid]}
+                key={grp.key}
+                style={[
+                  styles.debtorGroupCard,
+                  grp.hasUnpaid ? styles.debtorGroupCardUnpaid : styles.debtorGroupCardPaid,
+                ]}
               >
-                {/* Top Row: Debtor Info & Nominal */}
-                <View style={styles.debtCardTopRow}>
-                  {/* Left Avatar & Name */}
-                  <View style={styles.debtorInfoLeft}>
+                {/* Main Debtor Card Trigger (Tap to Expand/Collapse) */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.debtorHeaderPressable}
+                  onPress={() => toggleExpandDebtor(grp.key)}
+                >
+                  <View style={styles.debtorMainRow}>
+                    {/* Avatar Circle */}
                     <View
                       style={[
                         styles.debtorAvatar,
-                        { backgroundColor: isUnpaid ? '#FEF3C7' : '#DCFCE7' },
+                        { backgroundColor: grp.hasUnpaid ? '#FEF3C7' : '#DCFCE7' },
                       ]}
                     >
                       <Text
                         style={[
                           styles.debtorAvatarText,
-                          { color: isUnpaid ? '#B45309' : '#15803D' },
+                          { color: grp.hasUnpaid ? '#B45309' : '#15803D' },
                         ]}
                       >
-                        {debtorInitial}
+                        {grp.avatarInitial}
                       </Text>
                     </View>
 
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Text style={styles.debtorNameText}>
-                          {item.debtorName || 'Pelanggan Tanpa Nama'}
-                        </Text>
-                        <View
+                    {/* Debtor Name & Item Count Info */}
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.debtorNameTitle}>{grp.debtorName}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, flexWrap: 'wrap', gap: 6 }}>
+                        <View style={styles.trxCountBadge}>
+                          <Ionicons name="receipt-outline" size={11} color="#64748B" style={{ marginRight: 3 }} />
+                          <Text style={styles.trxCountBadgeText}>{grp.items.length} Transaksi</Text>
+                        </View>
+
+                        {grp.hasIncomeDebt && (
+                          <View style={[styles.typeTagMini, { backgroundColor: '#F0FDFA' }]}>
+                            <Text style={[styles.typeTagMiniText, { color: '#0D9488' }]}>Piutang</Text>
+                          </View>
+                        )}
+                        {grp.hasExpenseDebt && (
+                          <View style={[styles.typeTagMini, { backgroundColor: '#FEF2F2' }]}>
+                            <Text style={[styles.typeTagMiniText, { color: '#DC2626' }]}>Hutang Toko</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Right Nominal & Status Pill */}
+                    <View style={styles.debtorRightBlock}>
+                      <Text style={styles.debtorTotalAmountText}>
+                        {formatRupiah(grp.hasUnpaid ? grp.unpaidAmount : grp.totalAmount)}
+                      </Text>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          grp.hasUnpaid ? styles.statusPillUnpaid : styles.statusPillPaid,
+                        ]}
+                      >
+                        <Ionicons
+                          name={grp.hasUnpaid ? 'time' : 'checkmark-circle'}
+                          size={11}
+                          color={grp.hasUnpaid ? '#D97706' : '#16A34A'}
+                          style={{ marginRight: 3 }}
+                        />
+                        <Text
                           style={[
-                            styles.typeTag,
-                            { backgroundColor: isIncome ? '#F0FDFA' : '#FEF2F2' },
+                            styles.statusPillText,
+                            grp.hasUnpaid ? styles.statusPillTextUnpaid : styles.statusPillTextPaid,
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.typeTagText,
-                              { color: isIncome ? '#0D9488' : '#DC2626' },
-                            ]}
-                          >
-                            {isIncome ? 'Piutang' : 'Hutang Belanja'}
-                          </Text>
-                        </View>
+                          {grp.hasUnpaid ? `${grp.unpaidCount} Belum Lunas` : 'Lunas'}
+                        </Text>
                       </View>
+                    </View>
 
-                      <Text style={styles.debtItemDetail}>
-                        {item.name} • {item.quantity} {item.unit} (@ {formatRupiah(item.price)})
-                      </Text>
+                    {/* Chevron Indicator */}
+                    <View style={styles.chevronBox}>
+                      <Ionicons
+                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                        size={18}
+                        color="#94A3B8"
+                      />
                     </View>
                   </View>
+                </TouchableOpacity>
 
-                  {/* Right Nominal & Status Badge */}
-                  <View style={styles.debtorNominalRight}>
-                    <Text style={styles.nominalText}>{formatRupiah(item.total)}</Text>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        isUnpaid ? styles.statusPillUnpaid : styles.statusPillPaid,
-                      ]}
-                    >
-                      <Ionicons
-                        name={isUnpaid ? 'time' : 'checkmark-circle'}
-                        size={12}
-                        color={isUnpaid ? '#D97706' : '#16A34A'}
-                        style={{ marginRight: 3 }}
-                      />
-                      <Text
-                        style={[
-                          styles.statusPillText,
-                          isUnpaid ? styles.statusPillTextUnpaid : styles.statusPillTextPaid,
-                        ]}
-                      >
-                        {isUnpaid ? 'Belum Lunas' : 'Lunas'}
+                {/* EXPANDED TRANSACTION HISTORY DRAWER */}
+                {isExpanded && (
+                  <View style={styles.drawerContainer}>
+                    <View style={styles.drawerHeaderRow}>
+                      <Text style={styles.drawerHeaderTitle}>
+                        Rincian Transaksi ({grp.items.length} Item)
                       </Text>
+                      {grp.hasUnpaid && grp.unpaidCount > 1 && (
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          style={styles.settleAllBtn}
+                          onPress={() => handleSettleAllForPerson(grp)}
+                        >
+                          <Ionicons name="checkmark-done" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                          <Text style={styles.settleAllBtnText}>Lunasi Semua ({grp.unpaidCount})</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
+
+                    {/* Individual Items List */}
+                    {grp.items.map((item, idx) => {
+                      const isItemUnpaid =
+                        item.debtStatus === 'Belum Lunas' ||
+                        (!item.debtStatus && item.paymentMethod === 'Hutang');
+
+                      return (
+                        <View
+                          key={item.id}
+                          style={[
+                            styles.subItemRow,
+                            idx < grp.items.length - 1 && styles.subItemRowBorder,
+                            isItemUnpaid ? styles.subItemUnpaidBg : styles.subItemPaidBg,
+                          ]}
+                        >
+                          {/* Item Left Info */}
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Text style={styles.subItemName}>{item.name}</Text>
+                              <View
+                                style={[
+                                  styles.subItemTypePill,
+                                  {
+                                    backgroundColor:
+                                      item.transactionType === 'IN' ? '#F0FDFA' : '#FEF2F2',
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.subItemTypePillText,
+                                    {
+                                      color:
+                                        item.transactionType === 'IN' ? '#0D9488' : '#DC2626',
+                                    },
+                                  ]}
+                                >
+                                  {item.transactionType === 'IN' ? 'Piutang' : 'Hutang Belanja'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <Text style={styles.subItemQtyPrice}>
+                              {item.quantity} {item.unit} @ {formatRupiah(item.price)}
+                            </Text>
+
+                            <Text style={styles.subItemDateText}>
+                              📅 {item.fullDateText || item.dateKey} • {item.timeText || '12:00 WIB'}
+                            </Text>
+                          </View>
+
+                          {/* Item Right Nominal & Actions */}
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.subItemNominal}>{formatRupiah(item.total)}</Text>
+
+                            <View style={styles.subItemActionsRow}>
+                              {/* Delete button */}
+                              <TouchableOpacity
+                                activeOpacity={0.7}
+                                style={styles.subItemDeleteBtn}
+                                onPress={() => handleDeleteItem(item.id, item.name)}
+                              >
+                                <Ionicons name="trash-outline" size={14} color="#94A3B8" />
+                              </TouchableOpacity>
+
+                              {/* Toggle Status Button */}
+                              <TouchableOpacity
+                                activeOpacity={0.85}
+                                style={[
+                                  styles.subItemPayBtn,
+                                  isItemUnpaid
+                                    ? styles.subItemPayBtnUnpaid
+                                    : styles.subItemPayBtnPaid,
+                                ]}
+                                onPress={() => handleToggleItemStatus(item, grp.debtorName)}
+                              >
+                                <Ionicons
+                                  name={
+                                    isItemUnpaid
+                                      ? 'checkmark-circle-outline'
+                                      : 'refresh-outline'
+                                  }
+                                  size={13}
+                                  color={isItemUnpaid ? '#FFFFFF' : '#475569'}
+                                  style={{ marginRight: 3 }}
+                                />
+                                <Text
+                                  style={[
+                                    styles.subItemPayBtnText,
+                                    isItemUnpaid
+                                      ? styles.subItemPayBtnTextUnpaid
+                                      : styles.subItemPayBtnTextPaid,
+                                  ]}
+                                >
+                                  {isItemUnpaid ? 'Lunasi' : 'Batal'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
                   </View>
-                </View>
-
-                {/* Divider */}
-                <View style={styles.cardDivider} />
-
-                {/* Bottom Row: Date & Action Buttons */}
-                <View style={styles.debtCardBottomRow}>
-                  <View style={styles.dateInfoRow}>
-                    <Ionicons name="calendar-outline" size={13} color="#94A3B8" style={{ marginRight: 4 }} />
-                    <Text style={styles.dateInfoText}>
-                      {item.fullDateText || item.dateKey} • {item.timeText || '12:00 WIB'}
-                    </Text>
-                  </View>
-
-                  <View style={styles.actionButtonRow}>
-                    {/* Delete Action Button */}
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      style={styles.iconDeleteBtn}
-                      onPress={() => handleDeleteDebt(item.id, item.debtorName || item.name)}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#94A3B8" />
-                    </TouchableOpacity>
-
-                    {/* Toggle Lunas Button */}
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={[
-                        styles.togglePayBtn,
-                        isUnpaid ? styles.togglePayBtnUnpaid : styles.togglePayBtnPaid,
-                      ]}
-                      onPress={() => handleToggleStatus(item)}
-                    >
-                      <Ionicons
-                        name={isUnpaid ? 'checkmark-circle-outline' : 'refresh-outline'}
-                        size={15}
-                        color={isUnpaid ? '#FFFFFF' : '#475569'}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text
-                        style={[
-                          styles.togglePayBtnText,
-                          isUnpaid ? styles.togglePayBtnTextUnpaid : styles.togglePayBtnTextPaid,
-                        ]}
-                      >
-                        {isUnpaid ? 'Tandai Lunas' : 'Batal Lunas'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                )}
               </View>
             );
           })
         ) : (
           <View style={styles.emptyStateContainer}>
             <View style={styles.emptyIconCircle}>
-              <Ionicons name="receipt-outline" size={38} color="#94A3B8" />
+              <Ionicons name="people-outline" size={38} color="#94A3B8" />
             </View>
             <Text style={styles.emptyStateTitle}>Tidak ada catatan hutang</Text>
             <Text style={styles.emptyStateSub}>
               {searchQuery
-                ? `Tidak ditemukan hutang dengan kata kunci "${searchQuery}".`
+                ? `Tidak ditemukan penghutang dengan kata kunci "${searchQuery}".`
                 : 'Belum ada transaksi hutang yang tercatat pada filter ini.'}
             </Text>
             <TouchableOpacity
@@ -672,37 +867,45 @@ const styles = StyleSheet.create({
     color: '#B45309',
     letterSpacing: 0.3,
   },
+  subMetricsRow: {
+    flexDirection: 'row',
+  },
   metricCardSub: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
+  metricCardHeaderMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   iconCircleMini: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 6,
   },
   metricSubTag: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#475569',
     flex: 1,
   },
   metricValueMini: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
     color: '#0D9488',
     marginTop: 2,
   },
   metricSubHint: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#94A3B8',
-    marginTop: 2,
+    marginTop: 1,
   },
   searchBarContainer: {
     flexDirection: 'row',
@@ -772,87 +975,89 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
   },
-  debtCard: {
+  debtorGroupCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 18,
     marginBottom: 12,
     borderWidth: 1,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 1,
   },
-  debtCardUnpaid: {
+  debtorGroupCardUnpaid: {
     borderColor: '#FED7AA',
     borderLeftWidth: 4,
     borderLeftColor: '#F59E0B',
   },
-  debtCardPaid: {
+  debtorGroupCardPaid: {
     borderColor: '#E2E8F0',
-    opacity: 0.85,
+    opacity: 0.9,
   },
-  debtCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  debtorHeaderPressable: {
+    padding: 14,
   },
-  debtorInfoLeft: {
+  debtorMainRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-    marginRight: 10,
+    alignItems: 'center',
   },
   debtorAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   debtorAvatarText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '900',
   },
-  debtorNameText: {
-    fontSize: 14,
+  debtorNameTitle: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
-    marginRight: 6,
   },
-  typeTag: {
+  trxCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  trxCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  typeTagMini: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    marginTop: 2,
   },
-  typeTagText: {
-    fontSize: 10,
+  typeTagMiniText: {
+    fontSize: 9,
     fontWeight: '800',
   },
-  debtItemDetail: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  debtorNominalRight: {
+  debtorRightBlock: {
     alignItems: 'flex-end',
+    marginRight: 6,
   },
-  nominalText: {
+  debtorTotalAmountText: {
     fontSize: 15,
     fontWeight: '900',
     color: '#0F172A',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   statusPillUnpaid: {
     backgroundColor: '#FEF3C7',
@@ -861,7 +1066,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCFCE7',
   },
   statusPillText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
   },
   statusPillTextUnpaid: {
@@ -870,57 +1075,133 @@ const styles = StyleSheet.create({
   statusPillTextPaid: {
     color: '#15803D',
   },
-  cardDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 10,
+  chevronBox: {
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  debtCardBottomRow: {
+  drawerContainer: {
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  drawerHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  drawerHeaderTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  settleAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  settleAllBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  subItemRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    marginBottom: 6,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  dateInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  subItemRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  dateInfoText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '600',
+  subItemUnpaidBg: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
   },
-  actionButtonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  subItemPaidBg: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    opacity: 0.85,
   },
-  iconDeleteBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+  subItemName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginRight: 6,
   },
-  togglePayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
+  subItemTypePill: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 1,
   },
-  togglePayBtnUnpaid: {
-    backgroundColor: '#16A34A',
-  },
-  togglePayBtnPaid: {
-    backgroundColor: '#F1F5F9',
-  },
-  togglePayBtnText: {
-    fontSize: 11,
+  subItemTypePillText: {
+    fontSize: 9,
     fontWeight: '800',
   },
-  togglePayBtnTextUnpaid: {
+  subItemQtyPrice: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  subItemDateText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  subItemNominal: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  subItemActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  subItemDeleteBtn: {
+    padding: 5,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  subItemPayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  subItemPayBtnUnpaid: {
+    backgroundColor: '#16A34A',
+  },
+  subItemPayBtnPaid: {
+    backgroundColor: '#E2E8F0',
+  },
+  subItemPayBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  subItemPayBtnTextUnpaid: {
     color: '#FFFFFF',
   },
-  togglePayBtnTextPaid: {
+  subItemPayBtnTextPaid: {
     color: '#64748B',
   },
   emptyStateContainer: {

@@ -31,6 +31,7 @@ interface TransactionContextType {
   updateTransaction: (id: string, data: Partial<OrderFormData>) => void;
   deleteTransaction: (id: string) => void;
   toggleDebtStatus: (id: string) => void;
+  settleAllDebtsForPerson: (debtorName: string) => void;
   getTransactionsByDay: (dayId: string, type?: 'IN' | 'OUT') => TransactionItem[];
   getTotalByType: (type: 'IN' | 'OUT', dayId?: string) => number;
 }
@@ -95,6 +96,26 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     fullDateText: 'Sabtu, 15 Agustus 2026',
     timeText: '15:30 WIB',
     timestamp: new Date('2026-08-15T15:30:00').getTime(),
+  },
+  {
+    id: 'trx-inc-hutang-1b',
+    name: 'Roti Bakar Keju Cokelat',
+    category: 'Makanan',
+    quantity: 2,
+    unit: 'Porsi',
+    price: 25000,
+    total: 50000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Pak Budi (Guru SMA)',
+    debtStatus: 'Belum Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
+    dayId: 'day-sat',
+    fullDateText: 'Sabtu, 15 Agustus 2026',
+    timeText: '15:40 WIB',
+    timestamp: new Date('2026-08-15T15:40:00').getTime(),
   },
   {
     id: 'trx-inc-7',
@@ -488,6 +509,25 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     });
   };
 
+  // Settle all unpaid debts for a specific person in one action
+  const settleAllDebtsForPerson = (debtorName: string) => {
+    const target = debtorName.trim().toLowerCase();
+    setTransactions((prev) => {
+      const updated = prev.map((item) => {
+        if ((item.debtorName || '').trim().toLowerCase() === target) {
+          return {
+            ...item,
+            debtStatus: 'Lunas' as const,
+            paymentMethod: 'Lunas' as const,
+          };
+        }
+        return item;
+      });
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
   const getTransactionsByDay = (dayId: string, type?: 'IN' | 'OUT') => {
     return transactions.filter((t) => {
       const matchDay = t.dayId === dayId;
@@ -510,6 +550,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
         updateTransaction,
         deleteTransaction,
         toggleDebtStatus,
+        settleAllDebtsForPerson,
         getTransactionsByDay,
         getTotalByType,
       }}
