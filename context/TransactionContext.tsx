@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OrderFormData } from '@/components/OrderModal';
 
-const STORAGE_KEY = '@simakan_transactions';
+const STORAGE_KEY = '@simakan_transactions_v2';
 
 export interface TransactionItem {
   id: string;
@@ -14,6 +14,8 @@ export interface TransactionItem {
   total: number;
   paymentMethod: 'Lunas' | 'Hutang';
   transactionType: 'IN' | 'OUT';
+  debtorName?: string;
+  debtStatus?: 'Belum Lunas' | 'Lunas';
   monthKey: string; // e.g. "2026-08"
   weekKey: string;  // e.g. "W1", "W2", "W3", "W4", "W5"
   dateKey: string;  // e.g. "2026-08-15"
@@ -28,6 +30,7 @@ interface TransactionContextType {
   addTransaction: (data: OrderFormData, targetDayId?: string, customDate?: Date) => void;
   updateTransaction: (id: string, data: Partial<OrderFormData>) => void;
   deleteTransaction: (id: string) => void;
+  toggleDebtStatus: (id: string) => void;
   getTransactionsByDay: (dayId: string, type?: 'IN' | 'OUT') => TransactionItem[];
   getTotalByType: (type: 'IN' | 'OUT', dayId?: string) => number;
 }
@@ -45,6 +48,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 330000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -63,6 +67,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 200000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -70,6 +75,26 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     fullDateText: 'Sabtu, 15 Agustus 2026',
     timeText: '15:10 WIB',
     timestamp: new Date('2026-08-15T15:10:00').getTime(),
+  },
+  {
+    id: 'trx-inc-hutang-1',
+    name: 'Kopi Susu Aren Special',
+    category: 'Minuman',
+    quantity: 3,
+    unit: 'Cup',
+    price: 22000,
+    total: 66000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Pak Budi (Guru SMA)',
+    debtStatus: 'Belum Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
+    dayId: 'day-sat',
+    fullDateText: 'Sabtu, 15 Agustus 2026',
+    timeText: '15:30 WIB',
+    timestamp: new Date('2026-08-15T15:30:00').getTime(),
   },
   {
     id: 'trx-inc-7',
@@ -81,6 +106,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 216000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -100,6 +126,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 250000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -118,6 +145,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 180000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -127,7 +155,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timestamp: new Date('2026-08-15T10:00:00').getTime(),
   },
 
-  // Jumat, 14 Agustus 2026 (W2/W3 border)
+  // Jumat, 14 Agustus 2026
   {
     id: 'trx-inc-8',
     name: 'Matcha Latte Ice',
@@ -138,6 +166,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 336000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-14',
@@ -145,6 +174,26 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     fullDateText: 'Jumat, 14 Agustus 2026',
     timeText: '13:15 WIB',
     timestamp: new Date('2026-08-14T13:15:00').getTime(),
+  },
+  {
+    id: 'trx-inc-hutang-2',
+    name: 'Nasi Goreng Spesial Telur',
+    category: 'Makanan',
+    quantity: 2,
+    unit: 'Porsi',
+    price: 28000,
+    total: 56000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Mas Fajar (Santri)',
+    debtStatus: 'Belum Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-14',
+    dayId: 'day-fri',
+    fullDateText: 'Jumat, 14 Agustus 2026',
+    timeText: '12:00 WIB',
+    timestamp: new Date('2026-08-14T12:00:00').getTime(),
   },
   {
     id: 'trx-exp-4',
@@ -156,6 +205,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 195000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-14',
@@ -165,7 +215,6 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timestamp: new Date('2026-08-14T11:20:00').getTime(),
   },
 
-  // --- AGUSTUS 2026: MINGGU KE-2 (08 - 14 Ags) ---
   // Rabu, 12 Agustus 2026
   {
     id: 'trx-inc-3',
@@ -177,6 +226,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 180000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-12',
@@ -195,6 +245,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 168000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-12',
@@ -213,6 +264,8 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 175000,
     paymentMethod: 'Hutang',
     transactionType: 'OUT',
+    debtorName: 'CV Plastik Jaya (Supplier)',
+    debtStatus: 'Belum Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-12',
@@ -233,6 +286,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 208000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-10',
@@ -240,6 +294,26 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     fullDateText: 'Senin, 10 Agustus 2026',
     timeText: '10:15 WIB',
     timestamp: new Date('2026-08-10T10:15:00').getTime(),
+  },
+  {
+    id: 'trx-inc-hutang-3',
+    name: 'Roti Bakar Keju Cokelat',
+    category: 'Makanan',
+    quantity: 4,
+    unit: 'Porsi',
+    price: 25000,
+    total: 100000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Bu Ani (Staf Yayasan)',
+    debtStatus: 'Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-10',
+    dayId: 'day-mon',
+    fullDateText: 'Senin, 10 Agustus 2026',
+    timeText: '11:00 WIB',
+    timestamp: new Date('2026-08-10T11:00:00').getTime(),
   },
   {
     id: 'trx-exp-5',
@@ -251,90 +325,14 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 215000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-10',
     dayId: 'day-mon',
     fullDateText: 'Senin, 10 Agustus 2026',
-    timeText: '08:45 WIB',
-    timestamp: new Date('2026-08-10T08:45:00').getTime(),
-  },
-
-  // --- AGUSTUS 2026: MINGGU KE-1 (01 - 07 Ags) ---
-  // Selasa, 04 Agustus 2026
-  {
-    id: 'trx-inc-6',
-    name: 'Americano Ice Segar',
-    category: 'Minuman',
-    quantity: 12,
-    unit: 'Cup',
-    price: 16000,
-    total: 192000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    monthKey: '2026-08',
-    weekKey: 'W1',
-    dateKey: '2026-08-04',
-    dayId: 'day-tue',
-    fullDateText: 'Selasa, 04 Agustus 2026',
-    timeText: '09:40 WIB',
-    timestamp: new Date('2026-08-04T09:40:00').getTime(),
-  },
-  {
-    id: 'trx-exp-6',
-    name: 'Sedotan Steril & Tissue Paper',
-    category: 'Kemasan',
-    quantity: 4,
-    unit: 'Pack',
-    price: 25000,
-    total: 100000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    monthKey: '2026-08',
-    weekKey: 'W1',
-    dateKey: '2026-08-04',
-    dayId: 'day-tue',
-    fullDateText: 'Selasa, 04 Agustus 2026',
-    timeText: '11:00 WIB',
-    timestamp: new Date('2026-08-04T11:00:00').getTime(),
-  },
-
-  // --- JULI 2026 SAMPLE DATA ---
-  {
-    id: 'trx-inc-jul-1',
-    name: 'Ice Lemon Tea Jumbo',
-    category: 'Minuman',
-    quantity: 20,
-    unit: 'Cup',
-    price: 15000,
-    total: 300000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    monthKey: '2026-07',
-    weekKey: 'W4',
-    dateKey: '2026-07-25',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 25 Juli 2026',
-    timeText: '15:30 WIB',
-    timestamp: new Date('2026-07-25T15:30:00').getTime(),
-  },
-  {
-    id: 'trx-exp-jul-1',
-    name: 'Listrik & Token PLN Juli',
-    category: 'Operasional',
-    quantity: 1,
-    unit: 'Bulan',
-    price: 350000,
-    total: 350000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    monthKey: '2026-07',
-    weekKey: 'W4',
-    dateKey: '2026-07-25',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 25 Juli 2026',
-    timeText: '10:00 WIB',
-    timestamp: new Date('2026-07-25T10:00:00').getTime(),
+    timeText: '09:00 WIB',
+    timestamp: new Date('2026-08-10T09:00:00').getTime(),
   },
 ];
 
@@ -399,6 +397,10 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     else if (dateNum > 14) weekKey = 'W3';
     else if (dateNum > 7) weekKey = 'W2';
 
+    const isDebt = data.paymentMethod === 'Hutang';
+    const assignedDebtor = isDebt ? (data.debtorName?.trim() || 'Tanpa Nama') : undefined;
+    const assignedDebtStatus = isDebt ? (data.debtStatus || 'Belum Lunas') : 'Lunas';
+
     const newTrx: TransactionItem = {
       id: 'trx-' + Date.now(),
       name: data.name,
@@ -409,6 +411,8 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       total: total,
       paymentMethod: data.paymentMethod || 'Lunas',
       transactionType: data.transactionType || 'IN',
+      debtorName: assignedDebtor,
+      debtStatus: assignedDebtStatus,
       monthKey,
       weekKey,
       dateKey,
@@ -432,6 +436,8 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
           const qty = data.quantity !== undefined ? data.quantity : item.quantity;
           const price = data.price !== undefined ? data.price : item.price;
           const total = qty * price;
+          const isDebt = (data.paymentMethod ?? item.paymentMethod) === 'Hutang';
+
           return {
             ...item,
             name: data.name ?? item.name,
@@ -442,6 +448,8 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
             total: total,
             paymentMethod: (data.paymentMethod ?? item.paymentMethod) as 'Lunas' | 'Hutang',
             transactionType: (data.transactionType ?? item.transactionType) as 'IN' | 'OUT',
+            debtorName: isDebt ? (data.debtorName ?? item.debtorName ?? 'Tanpa Nama') : undefined,
+            debtStatus: isDebt ? (data.debtStatus ?? item.debtStatus ?? 'Belum Lunas') : 'Lunas',
           };
         }
         return item;
@@ -454,6 +462,26 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
   const deleteTransaction = (id: string) => {
     setTransactions((prev) => {
       const updated = prev.filter((item) => item.id !== id);
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
+  // Mark debt as Paid (Lunas) or toggle back to Belum Lunas
+  const toggleDebtStatus = (id: string) => {
+    setTransactions((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          const newStatus: 'Belum Lunas' | 'Lunas' =
+            item.debtStatus === 'Belum Lunas' ? 'Lunas' : 'Belum Lunas';
+          return {
+            ...item,
+            debtStatus: newStatus,
+            paymentMethod: newStatus === 'Lunas' ? ('Lunas' as const) : ('Hutang' as const),
+          };
+        }
+        return item;
+      });
       saveTransactions(updated);
       return updated;
     });
@@ -480,6 +508,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
         addTransaction,
         updateTransaction,
         deleteTransaction,
+        toggleDebtStatus,
         getTransactionsByDay,
         getTotalByType,
       }}
@@ -496,4 +525,3 @@ export function useTransactions() {
   }
   return context;
 }
-

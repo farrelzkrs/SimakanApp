@@ -28,6 +28,8 @@ export interface OrderFormData {
   price: number;
   paymentMethod: 'Lunas' | 'Hutang';
   transactionType: 'IN' | 'OUT';
+  debtorName?: string;
+  debtStatus?: 'Belum Lunas' | 'Lunas';
 }
 
 export interface OrderModalProps {
@@ -73,6 +75,8 @@ export default function OrderModal({
   const [price, setPrice] = useState(0);
   const [priceInput, setPriceInput] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Lunas' | 'Hutang'>('Lunas');
+  const [debtorName, setDebtorName] = useState('');
+  const [debtStatus, setDebtStatus] = useState<'Belum Lunas' | 'Lunas'>('Belum Lunas');
   const [transactionType, setTransactionType] = useState<'IN' | 'OUT'>(defaultType);
 
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -106,6 +110,8 @@ export default function OrderModal({
         setPrice(initialData.price || 0);
         setPriceInput(initialData.price ? String(initialData.price) : '');
         setPaymentMethod(initialData.paymentMethod === 'Hutang' ? 'Hutang' : 'Lunas');
+        setDebtorName(initialData.debtorName || '');
+        setDebtStatus(initialData.debtStatus || 'Belum Lunas');
         setTransactionType(initialData.transactionType || defaultType);
 
         const matched = inventoryItems.find(
@@ -121,6 +127,8 @@ export default function OrderModal({
         setPrice(0);
         setPriceInput('');
         setPaymentMethod('Lunas');
+        setDebtorName('');
+        setDebtStatus('Belum Lunas');
         setTransactionType(defaultType);
         setSelectedInventoryItem(null);
       }
@@ -196,6 +204,16 @@ export default function OrderModal({
       return;
     }
 
+    if (paymentMethod === 'Hutang' && !debtorName.trim()) {
+      Alert.alert(
+        'Nama Penghutang Wajib Diisi',
+        transactionType === 'IN'
+          ? 'Silakan masukkan nama pelanggan yang berhutang.'
+          : 'Silakan masukkan nama pihak / supplier terkait.'
+      );
+      return;
+    }
+
     const parsedPrice = parseFloat(priceInput.replace(/[^0-9]/g, '')) || price || 0;
 
     if (transactionType === 'IN') {
@@ -223,6 +241,8 @@ export default function OrderModal({
       price: parsedPrice,
       paymentMethod,
       transactionType,
+      debtorName: paymentMethod === 'Hutang' ? debtorName.trim() : undefined,
+      debtStatus: paymentMethod === 'Hutang' ? debtStatus : 'Lunas',
     });
 
     onClose();
@@ -757,6 +777,32 @@ export default function OrderModal({
                   </View>
                 </View>
 
+                {/* DYNAMIC FIELD: NAMA PENGHUTANG */}
+                {paymentMethod === 'Hutang' && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>
+                      Nama Yang Berhutang <Text style={styles.requiredStar}>*</Text>
+                    </Text>
+                    <View style={styles.debtorInputBox}>
+                      <Ionicons name="person" size={18} color="#D97706" style={{ marginRight: 8 }} />
+                      <TextInput
+                        style={styles.debtorInputText}
+                        placeholder={
+                          transactionType === 'IN'
+                            ? 'Nama Pelanggan (cth: Pak Budi, Mas Fajar)...'
+                            : 'Nama Supplier / Pihak Terkait...'
+                        }
+                        placeholderTextColor="#A1A1AA"
+                        value={debtorName}
+                        onChangeText={setDebtorName}
+                      />
+                    </View>
+                    <Text style={styles.debtorHintText}>
+                      📌 Transaksi ini akan otomatis masuk ke menu Daftar Hutang.
+                    </Text>
+                  </View>
+                )}
+
                 {/* ACTIONS */}
                 <View style={styles.actionRow}>
                   {isEditing && onDelete && (
@@ -1265,6 +1311,28 @@ const styles = StyleSheet.create({
   },
   paymentChipTextActive: {
     color: '#FFFFFF',
+  },
+  debtorInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+  },
+  debtorInputText: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  debtorHintText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#D97706',
+    marginTop: 4,
   },
   actionRow: {
     flexDirection: 'row',

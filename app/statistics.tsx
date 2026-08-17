@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,51 +8,195 @@ import {
   Dimensions,
   SafeAreaView,
   Platform,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Image } from 'expo-image';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useTransactions, TransactionItem } from '@/context/TransactionContext';
+import OrderModal, { OrderFormData } from '@/components/OrderModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Watermark Bottle/Device Vector SVG Data URI (Light Blue Silhouette)
-const WATERMARK_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgMTQwIiBmaWxsPSJub25lIj48cGF0aCBkPSJNMjUgMzUgQyAyNSAxMCwgMTM1IDEwLCAxMzUgMzUgTCAxMzUgMTQwIEwgMjUgMTQwIFoiIGZpbGw9IiNFRUY0RkUiLz48cmVjdCB4PSIzMyIgeT0iNTAiIHdpZHRoPSI5NCIgaGVpZ2h0PSI4MCIgcng9IjgiIGZpbGw9IiNGRkZGRkYiLz48Y2lyY2xlIGN4PSI1OCIgY3k9IjkwIiByPSI4IiBmaWxsPSIjRUVGNEZFIi8+PGNpcmNsZSBjeD0iOTgiIGN5PSI5MCIgcj0iOCIgZmlsbD0iI0VFRjRGRSIvPjwvc3ZnPg==`;
+type DebtFilterType = 'ALL' | 'UNPAID' | 'PAID' | 'INCOME_DEBT' | 'EXPENSE_DEBT';
 
 export default function StatisticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
-  const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('chart');
-  const [activeTab, setActiveTab] = useState<'expense' | 'income'>('expense');
-  const [filterPeriod, setFilterPeriod] = useState<string>('Bulan');
-  const [sortFilter, setSortFilter] = useState<string>('Urutkan');
+  const { transactions, toggleDebtStatus, deleteTransaction, addTransaction } = useTransactions();
 
-  const isIncome = activeTab === 'income';
+  const [activeNav, setActiveNav] = useState<'home' | 'debt' | 'wallet'>('debt');
+  const [activeFilter, setActiveFilter] = useState<DebtFilterType>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<OrderFormData | null>(null);
+
+  // Extract all transactions that have paymentMethod === 'Hutang' OR have debtorName
+  const allDebtTransactions = useMemo(() => {
+    return transactions.filter(
+      (t) => t.paymentMethod === 'Hutang' || !!t.debtorName || t.debtStatus === 'Belum Lunas'
+    );
+  }, [transactions]);
+
+  // Aggregate Metrics
+  const metrics = useMemo(() => {
+    let unpaidTotal = 0;
+    let unpaidCount = 0;
+    let paidTotal = 0;
+    let paidCount = 0;
+    let customerReceivableTotal = 0; // Piutang Pemasukan (IN) belum lunas
+    let supplierDebtTotal = 0; // Hutang Pengeluaran (OUT) belum lunas
+
+    allDebtTransactions.forEach((t) => {
+      if (t.debtStatus === 'Belum Lunas' || (!t.debtStatus && t.paymentMethod === 'Hutang')) {
+        unpaidTotal += t.total;
+        unpaidCount += 1;
+        if (t.transactionType === 'IN') {
+          customerReceivableTotal += t.total;
+        } else {
+          supplierDebtTotal += t.total;
+        }
+      } else {
+        paidTotal += t.total;
+        paidCount += 1;
+      }
+    });
+
+    return {
+      unpaidTotal,
+      unpaidCount,
+      paidTotal,
+      paidCount,
+      customerReceivableTotal,
+      supplierDebtTotal,
+      totalRecords: allDebtTransactions.length,
+    };
+  }, [allDebtTransactions]);
+
+  // Filtered List based on Search & Active Filter Tab
+  const filteredDebts = useMemo(() => {
+    return allDebtTransactions.filter((t) => {
+      const isUnpaid = t.debtStatus === 'Belum Lunas' || (!t.debtStatus && t.paymentMethod === 'Hutang');
+      const isPaid = t.debtStatus === 'Lunas';
+
+      // 1. Tab Filter
+      if (activeFilter === 'UNPAID' && !isUnpaid) return false;
+      if (activeFilter === 'PAID' && !isPaid) return false;
+      if (activeFilter === 'INCOME_DEBT' && t.transactionType !== 'IN') return false;
+      if (activeFilter === 'EXPENSE_DEBT' && t.transactionType !== 'OUT') return false;
+
+      // 2. Search Query (Name of debtor, item name, or category)
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchDebtor = (t.debtorName || '').toLowerCase().includes(q);
+        const matchItem = t.name.toLowerCase().includes(q);
+        const matchCategory = t.category.toLowerCase().includes(q);
+        return matchDebtor || matchItem || matchCategory;
+      }
+
+      return true;
+    });
+  }, [allDebtTransactions, activeFilter, searchQuery]);
+
+  const formatRupiah = (num: number) => {
+    return 'Rp ' + num.toLocaleString('id-ID');
+  };
+
+  const handleToggleStatus = (item: TransactionItem) => {
+    const isCurrentlyUnpaid =
+      item.debtStatus === 'Belum Lunas' || (!item.debtStatus && item.paymentMethod === 'Hutang');
+
+    Alert.alert(
+      isCurrentlyUnpaid ? 'Konfirmasi Pelunasan' : 'Ubah ke Belum Lunas',
+      isCurrentlyUnpaid
+        ? `Tandai hutang/piutang "${item.debtorName || item.name}" sebesar ${formatRupiah(
+            item.total
+          )} sebagai LUNAS?`
+        : `Kembalikan status hutang "${item.debtorName || item.name}" menjadi BELUM LUNAS?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: isCurrentlyUnpaid ? 'Tandai Lunas' : 'Ubah Belum Lunas',
+          style: 'default',
+          onPress: () => {
+            toggleDebtStatus(item.id);
+            Alert.alert(
+              'Berhasil',
+              isCurrentlyUnpaid
+                ? `Hutang "${item.debtorName || item.name}" berhasil dilunasi!`
+                : `Status diubah kembali ke Belum Lunas.`
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteDebt = (id: string, name: string) => {
+    Alert.alert('Hapus Catatan Hutang', `Yakin ingin menghapus catatan hutang "${name}"?`, [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: () => {
+          deleteTransaction(id);
+        },
+      },
+    ]);
+  };
+
+  const handleSaveModalOrder = (data: OrderFormData) => {
+    addTransaction(data, 'day-sat');
+    setIsModalOpen(false);
+    setEditingItem(null);
+    Alert.alert('Sukses', `Catatan hutang untuk "${data.debtorName || data.name}" berhasil dicatat!`);
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
-      {/* Top Header Navigation */}
-      <View style={styles.headerBar}>
+      {/* Top Banner Header (Teal with Navy Gradient Feel) */}
+      <View style={styles.topHeaderBackground}>
         <SafeAreaView style={styles.headerSafeArea}>
-          <View style={styles.headerContent}>
+          <View style={styles.headerRow}>
             <TouchableOpacity
               activeOpacity={0.7}
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={() => router.replace('/dashboard')}
             >
-              <Ionicons name="chevron-back" size={26} color="#1E293B" />
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>Statistik</Text>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Daftar Hutang</Text>
+              <Text style={styles.headerSubtitle}>Catatan Piutang Pelanggan & Hutang Toko</Text>
+            </View>
 
-            <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
-              <Ionicons name="notifications" size={24} color="#14A39F" />
-              <View style={styles.notificationBadge} />
+            <TouchableOpacity
+              style={styles.addDebtBtn}
+              activeOpacity={0.8}
+              onPress={() => {
+                setEditingItem({
+                  name: '',
+                  category: 'Minuman',
+                  stock: 0,
+                  quantity: 1,
+                  unit: 'Cup',
+                  price: 0,
+                  paymentMethod: 'Hutang',
+                  transactionType: 'IN',
+                  debtorName: '',
+                  debtStatus: 'Belum Lunas',
+                });
+                setIsModalOpen(true);
+              }}
+            >
+              <Ionicons name="add" size={22} color="#14A39F" />
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -63,182 +207,350 @@ export default function StatisticsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 90 + bottomInset }]}
       >
-        {/* Income / Expense Toggle Segment */}
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[
-              styles.toggleButton,
-              isIncome && styles.toggleButtonIncomeActive,
-            ]}
-            onPress={() => setActiveTab('income')}
-          >
-            <Text
-              style={[
-                styles.toggleText,
-                isIncome && styles.toggleTextIncomeActive,
-              ]}
-            >
-              Pemasukan
-            </Text>
-          </TouchableOpacity>
+        {/* Metric Summary Cards Grid */}
+        <View style={styles.metricGrid}>
+          {/* Card 1: Total Belum Lunas */}
+          <View style={styles.metricCardWarning}>
+            <View style={styles.metricCardHeader}>
+              <View style={styles.iconCircleAmber}>
+                <Ionicons name="time" size={18} color="#D97706" />
+              </View>
+              <View style={styles.badgeAmber}>
+                <Text style={styles.badgeAmberText}>{metrics.unpaidCount} Transaksi</Text>
+              </View>
+            </View>
+            <Text style={styles.metricLabel}>Total Belum Lunas</Text>
+            <Text style={styles.metricValueAmber}>{formatRupiah(metrics.unpaidTotal)}</Text>
+          </View>
 
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[
-              styles.toggleButton,
-              !isIncome && styles.toggleButtonExpenseActive,
-            ]}
-            onPress={() => setActiveTab('expense')}
-          >
-            <Text
-              style={[
-                styles.toggleText,
-                !isIncome && styles.toggleTextExpenseActive,
-              ]}
-            >
-              Pengeluaran
+          {/* Card 2: Piutang Pelanggan (Pemasukan Belum Lunas) */}
+          <View style={styles.metricCardSub}>
+            <View style={styles.metricCardHeader}>
+              <View style={[styles.iconCircleMini, { backgroundColor: '#F0FDFA' }]}>
+                <Ionicons name="arrow-down-circle" size={16} color="#14A39F" />
+              </View>
+              <Text style={styles.metricSubTag}>Piutang Pelanggan</Text>
+            </View>
+            <Text style={styles.metricValueMini}>{formatRupiah(metrics.customerReceivableTotal)}</Text>
+            <Text style={styles.metricSubHint}>Pemasukan belum dibayar</Text>
+          </View>
+
+          {/* Card 3: Hutang Toko (Pengeluaran Belum Lunas) */}
+          <View style={styles.metricCardSub}>
+            <View style={styles.metricCardHeader}>
+              <View style={[styles.iconCircleMini, { backgroundColor: '#FEF2F2' }]}>
+                <Ionicons name="arrow-up-circle" size={16} color="#DC2626" />
+              </View>
+              <Text style={styles.metricSubTag}>Hutang Toko</Text>
+            </View>
+            <Text style={[styles.metricValueMini, { color: '#DC2626' }]}>
+              {formatRupiah(metrics.supplierDebtTotal)}
             </Text>
-          </TouchableOpacity>
+            <Text style={styles.metricSubHint}>Kewajiban belanja toko</Text>
+          </View>
         </View>
 
-        {/* Your Transaction Statistics Card Header */}
-        <View style={styles.chartCardHeaderRow}>
-          <Text style={styles.chartCardTitle}>
-            {isIncome ? 'Statistik pemasukan Anda' : 'Statistik pengeluaran Anda'}
-          </Text>
-
-          <TouchableOpacity style={styles.dropdownPillLight} activeOpacity={0.8}>
-            <Text style={styles.dropdownPillLightText}>{filterPeriod}</Text>
-            <Ionicons name="chevron-down" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
-          </TouchableOpacity>
+        {/* Live Search Bar */}
+        <View style={styles.searchBarContainer}>
+          <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchBarInput}
+            placeholder="Cari nama penghutang / nama barang..."
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Outer Colored Frame Card (Red for Expense, Teal for Income) */}
-        <View
-          style={[
-            styles.graphicCardOuter,
-            { backgroundColor: isIncome ? '#14A39F' : '#FA6B6C' },
-          ]}
+        {/* Filter Tabs Horizontal Scroll */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterTabsContainer}
         >
-          {/* Inner White Card */}
           <TouchableOpacity
-            activeOpacity={0.88}
-            style={styles.graphicCardInner}
-            onPress={() => {
-              if (isIncome) {
-                router.push('/rekap-pemasukan');
-              } else {
-                router.push('/rekap-pengeluaran');
-              }
-            }}
+            activeOpacity={0.8}
+            style={[styles.filterChip, activeFilter === 'ALL' && styles.filterChipActive]}
+            onPress={() => setActiveFilter('ALL')}
           >
-            {/* Left Content Row */}
-            <View style={styles.graphicCardLeftContent}>
-              {/* Blue Left Vertical Bar Pill */}
-              <View style={styles.bluePillIndicator} />
-
-              {/* Date Day Number */}
-              <Text style={styles.dateNumberText}>13</Text>
-
-              {/* Day Name & Month Year Column */}
-              <View style={styles.dateTextColumn}>
-                <Text style={styles.dayNameText}>Kamis</Text>
-                <Text style={styles.monthYearText}>Agustus 2026</Text>
-              </View>
-            </View>
-
-            {/* Right Background Watermark Silhouette */}
-            <View style={styles.watermarkContainer} pointerEvents="none">
-              <Image
-                source={{ uri: WATERMARK_SVG_URI }}
-                style={styles.watermarkImage}
-                contentFit="contain"
-              />
-            </View>
-
-            {/* Right Chevron Forward Icon */}
-            <Ionicons name="chevron-forward" size={24} color="#94A3B8" style={styles.chevronRightIcon} />
+            <Text style={[styles.filterChipText, activeFilter === 'ALL' && styles.filterChipTextActive]}>
+              Semua ({metrics.totalRecords})
+            </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.filterChip, activeFilter === 'UNPAID' && styles.filterChipActiveAmber]}
+            onPress={() => setActiveFilter('UNPAID')}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={14}
+              color={activeFilter === 'UNPAID' ? '#FFFFFF' : '#D97706'}
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === 'UNPAID' && styles.filterChipTextActive,
+              ]}
+            >
+              Belum Lunas ({metrics.unpaidCount})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.filterChip, activeFilter === 'PAID' && styles.filterChipActiveGreen]}
+            onPress={() => setActiveFilter('PAID')}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={activeFilter === 'PAID' ? '#FFFFFF' : '#16A34A'}
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === 'PAID' && styles.filterChipTextActive,
+              ]}
+            >
+              Sudah Lunas ({metrics.paidCount})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.filterChip, activeFilter === 'INCOME_DEBT' && styles.filterChipActive]}
+            onPress={() => setActiveFilter('INCOME_DEBT')}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === 'INCOME_DEBT' && styles.filterChipTextActive,
+              ]}
+            >
+              Piutang Pelanggan (IN)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.filterChip, activeFilter === 'EXPENSE_DEBT' && styles.filterChipActive]}
+            onPress={() => setActiveFilter('EXPENSE_DEBT')}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                activeFilter === 'EXPENSE_DEBT' && styles.filterChipTextActive,
+              ]}
+            >
+              Hutang Toko (OUT)
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Section Header */}
+        <View style={styles.listHeaderRow}>
+          <Text style={styles.listHeaderTitle}>Daftar Tagihan ({filteredDebts.length})</Text>
+          <Text style={styles.listHeaderSub}>Tekan 'Tandai Lunas' saat tagihan terbayar</Text>
         </View>
 
-        {/* Most Popular Transaction Section */}
-        <View style={styles.popularSection}>
-          <View style={styles.popularHeader}>
-            <Text style={styles.popularSectionTitle}>Transaksi paling populer</Text>
+        {/* Debt Cards List */}
+        {filteredDebts.length > 0 ? (
+          filteredDebts.map((item) => {
+            const isUnpaid =
+              item.debtStatus === 'Belum Lunas' || (!item.debtStatus && item.paymentMethod === 'Hutang');
+            const debtorInitial = (item.debtorName || item.name).trim().charAt(0).toUpperCase() || 'H';
+            const isIncome = item.transactionType === 'IN';
 
-            <TouchableOpacity style={styles.dropdownPillTeal} activeOpacity={0.8}>
-              <Text style={styles.dropdownPillTealText}>Urutkan</Text>
-              <Ionicons name="chevron-down" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            return (
+              <View
+                key={item.id}
+                style={[styles.debtCard, isUnpaid ? styles.debtCardUnpaid : styles.debtCardPaid]}
+              >
+                {/* Top Row: Debtor Info & Nominal */}
+                <View style={styles.debtCardTopRow}>
+                  {/* Left Avatar & Name */}
+                  <View style={styles.debtorInfoLeft}>
+                    <View
+                      style={[
+                        styles.debtorAvatar,
+                        { backgroundColor: isUnpaid ? '#FEF3C7' : '#DCFCE7' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.debtorAvatarText,
+                          { color: isUnpaid ? '#B45309' : '#15803D' },
+                        ]}
+                      >
+                        {debtorInitial}
+                      </Text>
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Text style={styles.debtorNameText}>
+                          {item.debtorName || 'Pelanggan Tanpa Nama'}
+                        </Text>
+                        <View
+                          style={[
+                            styles.typeTag,
+                            { backgroundColor: isIncome ? '#F0FDFA' : '#FEF2F2' },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.typeTagText,
+                              { color: isIncome ? '#0D9488' : '#DC2626' },
+                            ]}
+                          >
+                            {isIncome ? 'Piutang' : 'Hutang Belanja'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.debtItemDetail}>
+                        {item.name} • {item.quantity} {item.unit} (@ {formatRupiah(item.price)})
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Right Nominal & Status Badge */}
+                  <View style={styles.debtorNominalRight}>
+                    <Text style={styles.nominalText}>{formatRupiah(item.total)}</Text>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        isUnpaid ? styles.statusPillUnpaid : styles.statusPillPaid,
+                      ]}
+                    >
+                      <Ionicons
+                        name={isUnpaid ? 'time' : 'checkmark-circle'}
+                        size={12}
+                        color={isUnpaid ? '#D97706' : '#16A34A'}
+                        style={{ marginRight: 3 }}
+                      />
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          isUnpaid ? styles.statusPillTextUnpaid : styles.statusPillTextPaid,
+                        ]}
+                      >
+                        {isUnpaid ? 'Belum Lunas' : 'Lunas'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Divider */}
+                <View style={styles.cardDivider} />
+
+                {/* Bottom Row: Date & Action Buttons */}
+                <View style={styles.debtCardBottomRow}>
+                  <View style={styles.dateInfoRow}>
+                    <Ionicons name="calendar-outline" size={13} color="#94A3B8" style={{ marginRight: 4 }} />
+                    <Text style={styles.dateInfoText}>
+                      {item.fullDateText || item.dateKey} • {item.timeText || '12:00 WIB'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionButtonRow}>
+                    {/* Delete Action Button */}
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.iconDeleteBtn}
+                      onPress={() => handleDeleteDebt(item.id, item.debtorName || item.name)}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+
+                    {/* Toggle Lunas Button */}
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={[
+                        styles.togglePayBtn,
+                        isUnpaid ? styles.togglePayBtnUnpaid : styles.togglePayBtnPaid,
+                      ]}
+                      onPress={() => handleToggleStatus(item)}
+                    >
+                      <Ionicons
+                        name={isUnpaid ? 'checkmark-circle-outline' : 'refresh-outline'}
+                        size={15}
+                        color={isUnpaid ? '#FFFFFF' : '#475569'}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text
+                        style={[
+                          styles.togglePayBtnText,
+                          isUnpaid ? styles.togglePayBtnTextUnpaid : styles.togglePayBtnTextPaid,
+                        ]}
+                      >
+                        {isUnpaid ? 'Tandai Lunas' : 'Batal Lunas'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            );
+          })
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="receipt-outline" size={38} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyStateTitle}>Tidak ada catatan hutang</Text>
+            <Text style={styles.emptyStateSub}>
+              {searchQuery
+                ? `Tidak ditemukan hutang dengan kata kunci "${searchQuery}".`
+                : 'Belum ada transaksi hutang yang tercatat pada filter ini.'}
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.emptyAddBtn}
+              onPress={() => {
+                setEditingItem(null);
+                setIsModalOpen(true);
+              }}
+            >
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.emptyAddBtnText}>Catat Hutang Baru</Text>
             </TouchableOpacity>
           </View>
-
-          <View style={styles.transactionCard}>
-            {/* Item 1: Netflix */}
-            <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-              <View style={styles.transactionLeft}>
-                <View style={[styles.avatarCircle, { backgroundColor: '#18181B' }]}>
-                  <Text style={{ color: '#E50914', fontWeight: '900', fontSize: 20 }}>N</Text>
-                </View>
-                <Text style={styles.transactionName}>Netflix</Text>
-              </View>
-              <Text style={styles.transactionAmountExpense}>– Rp 12.000</Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            {/* Item 2: Consumption */}
-            <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-              <View style={styles.transactionLeft}>
-                <View style={[styles.avatarCircle, { backgroundColor: '#FEF3C7' }]}>
-                  <Ionicons name="restaurant-outline" size={22} color="#D97706" />
-                </View>
-                <Text style={styles.transactionName}>Konsumsi</Text>
-              </View>
-              <Text style={styles.transactionAmountExpense}>– Rp 250.000</Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            {/* Item 3: Boarding house */}
-            <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-              <View style={styles.transactionLeft}>
-                <View style={[styles.avatarCircle, { backgroundColor: '#DBEAFE' }]}>
-                  <Ionicons name="home-outline" size={22} color="#2563EB" />
-                </View>
-                <Text style={styles.transactionName}>Uang Kos</Text>
-              </View>
-              <Text style={styles.transactionAmountExpense}>– Rp 200.000</Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            {/* Item 4: Freelance Design */}
-            <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-              <View style={styles.transactionLeft}>
-                <View style={[styles.avatarCircle, { backgroundColor: '#FEF08A' }]}>
-                  <Ionicons name="color-palette-outline" size={22} color="#CA8A04" />
-                </View>
-                <Text style={styles.transactionName}>Desain Freelance</Text>
-              </View>
-              <Text style={styles.transactionAmountIncome}>+ Rp 1.000.000</Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            {/* Item 5: Maju Jaya Coffee */}
-            <TouchableOpacity activeOpacity={0.7} style={styles.transactionItem}>
-              <View style={styles.transactionLeft}>
-                <View style={[styles.avatarCircle, { backgroundColor: '#FFEDD5' }]}>
-                  <Ionicons name="cafe-outline" size={22} color="#EA580C" />
-                </View>
-                <Text style={styles.transactionName}>Maju Jaya Coffee</Text>
-              </View>
-              <Text style={styles.transactionAmountIncome}>+ Rp 2.000.000</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        )}
       </ScrollView>
+
+      {/* Quick Floating Add Button */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        style={[styles.floatingAddBtn, { bottom: 75 + bottomInset }]}
+        onPress={() => {
+          setEditingItem(null);
+          setIsModalOpen(true);
+        }}
+      >
+        <Ionicons name="add" size={24} color="#FFFFFF" />
+        <Text style={styles.floatingAddBtnText}>Catat Hutang</Text>
+      </TouchableOpacity>
+
+      {/* Order Modal for adding / editing debt transactions */}
+      <OrderModal
+        visible={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingItem(null);
+        }}
+        onSave={handleSaveModalOrder}
+        initialData={editingItem}
+        defaultType="IN"
+      />
 
       {/* Bottom Navigation Bar */}
       <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
@@ -250,23 +562,16 @@ export default function StatisticsScreen() {
             router.replace('/dashboard');
           }}
         >
-          <Ionicons
-            name={activeNav === 'home' ? 'home' : 'home-outline'}
-            size={26}
-            color={activeNav === 'home' ? '#14A39F' : '#94A3B8'}
-          />
+          <Ionicons name="home-outline" size={26} color="#94A3B8" />
         </TouchableOpacity>
 
+        {/* 2. DAFTAR HUTANG TAB */}
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.navItem}
-          onPress={() => setActiveNav('chart')}
+          onPress={() => setActiveNav('debt')}
         >
-          <Ionicons
-            name={activeNav === 'chart' ? 'stats-chart' : 'stats-chart-outline'}
-            size={24}
-            color={activeNav === 'chart' ? '#14A39F' : '#94A3B8'}
-          />
+          <Ionicons name="receipt" size={26} color="#14A39F" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -277,11 +582,7 @@ export default function StatisticsScreen() {
             router.replace('/inventory');
           }}
         >
-          <Ionicons
-            name={activeNav === 'wallet' ? 'card' : 'card-outline'}
-            size={26}
-            color={activeNav === 'wallet' ? '#14A39F' : '#94A3B8'}
-          />
+          <Ionicons name="card-outline" size={26} color="#94A3B8" />
         </TouchableOpacity>
       </View>
     </View>
@@ -291,267 +592,445 @@ export default function StatisticsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F7F6',
+    backgroundColor: '#F8FAFC',
   },
-  headerBar: {
-    backgroundColor: '#F4F7F6',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.6)',
+  topHeaderBackground: {
+    backgroundColor: '#0F172A',
+    paddingBottom: 16,
   },
   headerSafeArea: {
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingTop: Platform.OS === 'android' ? 36 : 8,
   },
-  headerContent: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   backButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 10,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  notificationButton: {
-    position: 'relative',
-    padding: 4,
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: '#EF4444',
-    borderWidth: 1.5,
-    borderColor: '#F4F7F6',
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 4,
-    marginBottom: 18,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 12,
-  },
-  toggleButtonIncomeActive: {
-    backgroundColor: '#14A39F',
-  },
-  toggleButtonExpenseActive: {
-    backgroundColor: '#FA6B6C',
-  },
-  toggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  toggleTextIncomeActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  toggleTextExpenseActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  chartCardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  chartCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  dropdownPillLight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  dropdownPillLightText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  graphicCardOuter: {
-    borderRadius: 24,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    marginBottom: 24,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  graphicCardInner: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  graphicCardLeftContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    zIndex: 2,
-  },
-  bluePillIndicator: {
-    width: 4,
-    height: 38,
-    borderRadius: 2,
-    backgroundColor: '#2563EB',
-    marginRight: 14,
-  },
-  dateNumberText: {
-    fontSize: 34,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
-    marginRight: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
-  dateTextColumn: {
-    justifyContent: 'center',
-  },
-  dayNameText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-    lineHeight: 20,
-  },
-  monthYearText: {
-    fontSize: 12,
+  headerSubtitle: {
+    fontSize: 11,
+    color: '#94A3B8',
     fontWeight: '500',
-    color: '#64748B',
     marginTop: 2,
   },
-  watermarkContainer: {
-    position: 'absolute',
-    right: 35,
-    top: -10,
-    bottom: -10,
-    width: 140,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  watermarkImage: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.85,
-  },
-  chevronRightIcon: {
-    zIndex: 5,
-    marginLeft: 8,
-  },
-  popularSection: {
-    marginBottom: 20,
-  },
-  popularHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  popularSectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  dropdownPillTeal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#14A39F',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-  },
-  dropdownPillTealText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  transactionCard: {
+  addDebtBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-    shadowColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  metricGrid: {
+    marginBottom: 16,
+    gap: 10,
+  },
+  metricCardWarning: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 2,
   },
-  transactionItem: {
+  metricCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    marginBottom: 8,
   },
-  transactionLeft: {
+  iconCircleAmber: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeAmber: {
+    backgroundColor: '#FDE68A',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  badgeAmberText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  metricValueAmber: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#B45309',
+    letterSpacing: 0.3,
+  },
+  metricCardSub: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  iconCircleMini: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  metricSubTag: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    flex: 1,
+  },
+  metricValueMini: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0D9488',
+    marginTop: 2,
+  },
+  metricSubHint: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
   },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
+  searchBarInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  filterTabsContainer: {
+    gap: 8,
+    paddingBottom: 14,
+  },
+  filterChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  transactionName: {
+  filterChipActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  filterChipActiveAmber: {
+    backgroundColor: '#D97706',
+    borderColor: '#D97706',
+  },
+  filterChipActiveGreen: {
+    backgroundColor: '#16A34A',
+    borderColor: '#16A34A',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  listHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  listHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  listHeaderSub: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  debtCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  debtCardUnpaid: {
+    borderColor: '#FED7AA',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  debtCardPaid: {
+    borderColor: '#E2E8F0',
+    opacity: 0.85,
+  },
+  debtCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  debtorInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+    marginRight: 10,
+  },
+  debtorAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  debtorAvatarText: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  debtorNameText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginRight: 6,
+  },
+  typeTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 2,
+  },
+  typeTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  debtItemDetail: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  debtorNominalRight: {
+    alignItems: 'flex-end',
+  },
+  nominalText: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 4,
   },
-  transactionAmountExpense: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  transactionAmountIncome: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
+  statusPillUnpaid: {
+    backgroundColor: '#FEF3C7',
   },
-  divider: {
+  statusPillPaid: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  statusPillTextUnpaid: {
+    color: '#B45309',
+  },
+  statusPillTextPaid: {
+    color: '#15803D',
+  },
+  cardDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
+    marginVertical: 10,
+  },
+  debtCardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dateInfoText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  actionButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconDeleteBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  togglePayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  togglePayBtnUnpaid: {
+    backgroundColor: '#16A34A',
+  },
+  togglePayBtnPaid: {
+    backgroundColor: '#F1F5F9',
+  },
+  togglePayBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  togglePayBtnTextUnpaid: {
+    color: '#FFFFFF',
+  },
+  togglePayBtnTextPaid: {
+    color: '#64748B',
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  emptyStateSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  emptyAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#14A39F',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  emptyAddBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  floatingAddBtn: {
+    position: 'absolute',
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#14A39F',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: '#14A39F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  floatingAddBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginLeft: 6,
   },
   bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
   },
   navItem: {
     alignItems: 'center',

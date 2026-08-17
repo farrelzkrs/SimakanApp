@@ -598,7 +598,7 @@ export default function InventoryScreen() {
           style={styles.navItem}
           onPress={() => router.replace('/statistics')}
         >
-          <Ionicons name="stats-chart-outline" size={24} color="#94A3B8" />
+          <Ionicons name="receipt-outline" size={24} color="#94A3B8" />
         </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7} style={styles.navItem}>

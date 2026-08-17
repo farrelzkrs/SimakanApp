@@ -602,7 +602,7 @@ export default function DashboardScreen() {
           }}
         >
           <Ionicons
-            name={activeNav === 'chart' ? 'stats-chart' : 'stats-chart-outline'}
+            name={activeNav === 'chart' ? 'receipt' : 'receipt-outline'}
             size={24}
             color={activeNav === 'chart' ? '#14A39F' : '#94A3B8'}
           />
