@@ -17,8 +17,8 @@ import { useRouter } from 'expo-router';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Dual Line Wave SVG Chart Data URI (Income & Expense Crossing Waves)
-const DUAL_CHART_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTIwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9InRlYWxHcmFkIiB4MT0iMCIgeTE9IjAiIHkyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzE0QTM5RiIgc3RvcC1vcGFjaXR5PSIwLjM1Ii8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMTRBMzlGIiBzdG9wLW9wYWNpdHk9IjAuMDIiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0icmVkR3JhZCIgeDE9IjAiIHkxPSIwIiB4Mj0iMCIgeTI9IjEiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNGQTZCNkMiIHN0b3Atb3BhY2l0eT0iMC4yNSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI0ZBNkJmQyIgc3RvcC1vcGFjaXR5PSIwLjAyIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTAsNzAgQzQwLDQwIDcwLDgwIDExMCw1MCBDMTUwLDc1IDE4MCw4NSAyMTAsNDAgQzI0MCw2NSAyNzAsNDAgMzEwLDQ1IEMzMzAsNTAgMzQwLDQ1IDM1MCw1MCBMMzUwLDEyMCBMMCwxMjAgWiIgZmlsbD0idXJsKCN0ZWFsR3JhZCkiLz48cGF0aCBkPSJNMCw3MCBDNDAsNDAgNzAsODAgMTEwLDUwIEMxNTAsNzUgMTgwLDg1IDIxMCw4MCBDMjQwLDY1IDI3MCw0MCAzMTAsNDUgQzMzMCw1MCAzNDAsNDUgMzUwLDUwIiBmaWxsPSJub25lIiBzdHJva2U9IiMxNEEzOUYiIHN0cm9rZS13aWR0aD0iMi41Ii8+PHBhdGggZD0iTTAsODUgQzM1LDY1IDc1LDkwIDExMCw2NSBDMTQ1LDQ1IDE3NSw2MCAyMTAsODAgQzI0NSw5NSA0NzUsNjAgMzEwLDc1IEMzMzAsNTAgMzQwLDcwIDM1MCw2NSBMMzUwLDEyMCBMMCwxMjAgWiIgZmlsbD0idXJsKCNyZWRHcmFkKSIvPjxwYXRoIGQ9Ik0wLDg1IEMzNSw2NSA3NSw5MCAxMTAsNjUgQzE0NSw0NSAxNzUsNjAgMjEwLDgwIEMyNDUsOTUgNDc1LDYwIDMxMCw3NSBDMzMwLDUwIDM0MCw3MCAzNTAsNjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZBNkJmQyIgc3Rvc2Utd2lkdGg9IjIiLz48L3N2Zz4=`;
+// Watermark Bottle/Device Vector SVG Data URI (Light Blue Silhouette)
+const WATERMARK_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgMTQwIiBmaWxsPSJub25lIj48cGF0aCBkPSJNMjUgMzUgQyAyNSAxMCwgMTM1IDEwLCAxMzUgMzUgTCAxMzUgMTQwIEwgMjUgMTQwIFoiIGZpbGw9IiNFRUY0RkUiLz48cmVjdCB4PSIzMyIgeT0iNTAiIHdpZHRoPSI5NCIgaGVpZ2h0PSI4MCIgcng9IjgiIGZpbGw9IiNGRkZGRkYiLz48Y2lyY2xlIGN4PSI1OCIgY3k9IjkwIiByPSI4IiBmaWxsPSIjRUVGNEZFIi8+PGNpcmNsZSBjeD0iOTgiIGN5PSI5MCIgcj0iOCIgZmlsbD0iI0VFRjRGRSIvPjwvc3ZnPg==`;
 
 export default function StatisticsScreen() {
   const router = useRouter();
@@ -26,8 +26,11 @@ export default function StatisticsScreen() {
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('chart');
+  const [activeTab, setActiveTab] = useState<'expense' | 'income'>('expense');
   const [filterPeriod, setFilterPeriod] = useState<string>('Bulan');
   const [sortFilter, setSortFilter] = useState<string>('Urutkan');
+
+  const isIncome = activeTab === 'income';
 
   return (
     <View style={styles.container}>
@@ -60,34 +63,103 @@ export default function StatisticsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 90 + bottomInset }]}
       >
-        {/* Your Transaction Statistics Card */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartCardHeader}>
-            <Text style={styles.chartCardTitle}>Statistik transaksi Anda</Text>
+        {/* Income / Expense Toggle Segment */}
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={[
+              styles.toggleButton,
+              isIncome && styles.toggleButtonIncomeActive,
+            ]}
+            onPress={() => setActiveTab('income')}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                isIncome && styles.toggleTextIncomeActive,
+              ]}
+            >
+              Pemasukan
+            </Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity style={styles.dropdownPillLight} activeOpacity={0.8}>
-              <Text style={styles.dropdownPillLightText}>{filterPeriod}</Text>
-              <Ionicons name="chevron-down" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={[
+              styles.toggleButton,
+              !isIncome && styles.toggleButtonExpenseActive,
+            ]}
+            onPress={() => setActiveTab('expense')}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                !isIncome && styles.toggleTextExpenseActive,
+              ]}
+            >
+              Pengeluaran
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-          {/* Dual Line Chart Area */}
-          <View style={styles.chartArea}>
-            <Image
-              source={{ uri: DUAL_CHART_SVG_URI }}
-              style={styles.chartSvg}
-              contentFit="fill"
-            />
+        {/* Your Transaction Statistics Card Header */}
+        <View style={styles.chartCardHeaderRow}>
+          <Text style={styles.chartCardTitle}>
+            {isIncome ? 'Statistik pemasukan Anda' : 'Statistik pengeluaran Anda'}
+          </Text>
 
-            {/* Highlighted Peak Point Tooltip */}
-            <View style={styles.tooltipContainer}>
-              <View style={styles.tooltipPill}>
-                <Text style={styles.tooltipMonthText}>Juni 2020</Text>
-                <Text style={styles.tooltipAmountText}>+ $ 12.000</Text>
+          <TouchableOpacity style={styles.dropdownPillLight} activeOpacity={0.8}>
+            <Text style={styles.dropdownPillLightText}>{filterPeriod}</Text>
+            <Ionicons name="chevron-down" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Outer Colored Frame Card (Red for Expense, Teal for Income) */}
+        <View
+          style={[
+            styles.graphicCardOuter,
+            { backgroundColor: isIncome ? '#14A39F' : '#FA6B6C' },
+          ]}
+        >
+          {/* Inner White Card */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={styles.graphicCardInner}
+            onPress={() => {
+              if (isIncome) {
+                router.push('/rekap-pemasukan');
+              } else {
+                router.push('/rekap-pengeluaran');
+              }
+            }}
+          >
+            {/* Left Content Row */}
+            <View style={styles.graphicCardLeftContent}>
+              {/* Blue Left Vertical Bar Pill */}
+              <View style={styles.bluePillIndicator} />
+
+              {/* Date Day Number */}
+              <Text style={styles.dateNumberText}>13</Text>
+
+              {/* Day Name & Month Year Column */}
+              <View style={styles.dateTextColumn}>
+                <Text style={styles.dayNameText}>Kamis</Text>
+                <Text style={styles.monthYearText}>Agustus 2026</Text>
               </View>
-              <View style={styles.tooltipDot} />
             </View>
-          </View>
+
+            {/* Right Background Watermark Silhouette */}
+            <View style={styles.watermarkContainer} pointerEvents="none">
+              <Image
+                source={{ uri: WATERMARK_SVG_URI }}
+                style={styles.watermarkImage}
+                contentFit="contain"
+              />
+            </View>
+
+            {/* Right Chevron Forward Icon */}
+            <Ionicons name="chevron-forward" size={24} color="#94A3B8" style={styles.chevronRightIcon} />
+          </TouchableOpacity>
         </View>
 
         {/* Most Popular Transaction Section */}
@@ -110,7 +182,7 @@ export default function StatisticsScreen() {
                 </View>
                 <Text style={styles.transactionName}>Netflix</Text>
               </View>
-              <Text style={styles.transactionAmountExpense}>– $ 12,00</Text>
+              <Text style={styles.transactionAmountExpense}>– Rp 12.000</Text>
             </TouchableOpacity>
 
             <View style={styles.divider} />
@@ -123,7 +195,7 @@ export default function StatisticsScreen() {
                 </View>
                 <Text style={styles.transactionName}>Konsumsi</Text>
               </View>
-              <Text style={styles.transactionAmountExpense}>– $ 250,00</Text>
+              <Text style={styles.transactionAmountExpense}>– Rp 250.000</Text>
             </TouchableOpacity>
 
             <View style={styles.divider} />
@@ -136,7 +208,7 @@ export default function StatisticsScreen() {
                 </View>
                 <Text style={styles.transactionName}>Uang Kos</Text>
               </View>
-              <Text style={styles.transactionAmountExpense}>– $ 200,00</Text>
+              <Text style={styles.transactionAmountExpense}>– Rp 200.000</Text>
             </TouchableOpacity>
 
             <View style={styles.divider} />
@@ -149,7 +221,7 @@ export default function StatisticsScreen() {
                 </View>
                 <Text style={styles.transactionName}>Desain Freelance</Text>
               </View>
-              <Text style={styles.transactionAmountIncome}>+ $ 1.000,00</Text>
+              <Text style={styles.transactionAmountIncome}>+ Rp 1.000.000</Text>
             </TouchableOpacity>
 
             <View style={styles.divider} />
@@ -162,7 +234,7 @@ export default function StatisticsScreen() {
                 </View>
                 <Text style={styles.transactionName}>Maju Jaya Coffee</Text>
               </View>
-              <Text style={styles.transactionAmountIncome}>+ $ 2.000,00</Text>
+              <Text style={styles.transactionAmountIncome}>+ Rp 2.000.000</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -263,34 +335,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
   },
-  chartCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingTop: 18,
-    marginBottom: 24,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    overflow: 'hidden',
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 18,
   },
-  chartCardHeader: {
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  toggleButtonIncomeActive: {
+    backgroundColor: '#14A39F',
+  },
+  toggleButtonExpenseActive: {
+    backgroundColor: '#FA6B6C',
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  toggleTextIncomeActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  toggleTextExpenseActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  chartCardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   chartCardTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1E293B',
   },
   dropdownPillLight: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#E2E8F0',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 14,
@@ -298,49 +389,82 @@ const styles = StyleSheet.create({
   dropdownPillLightText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#475569',
   },
-  chartArea: {
-    height: 140,
-    width: '100%',
+  graphicCardOuter: {
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginBottom: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  graphicCardInner: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     position: 'relative',
-    justifyContent: 'flex-end',
+    overflow: 'hidden',
   },
-  chartSvg: {
+  graphicCardLeftContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    zIndex: 2,
+  },
+  bluePillIndicator: {
+    width: 4,
+    height: 38,
+    borderRadius: 2,
+    backgroundColor: '#2563EB',
+    marginRight: 14,
+  },
+  dateNumberText: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginRight: 14,
+  },
+  dateTextColumn: {
+    justifyContent: 'center',
+  },
+  dayNameText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E293B',
+    lineHeight: 20,
+  },
+  monthYearText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  watermarkContainer: {
+    position: 'absolute',
+    right: 35,
+    top: -10,
+    bottom: -10,
+    width: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  watermarkImage: {
     width: '100%',
     height: '100%',
+    opacity: 0.85,
   },
-  tooltipContainer: {
-    position: 'absolute',
-    right: 110,
-    top: 20,
-    alignItems: 'center',
-  },
-  tooltipPill: {
-    backgroundColor: '#14A39F',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  tooltipMonthText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  tooltipAmountText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  tooltipDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#F87171',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  chevronRightIcon: {
+    zIndex: 5,
+    marginLeft: 8,
   },
   popularSection: {
     marginBottom: 20,

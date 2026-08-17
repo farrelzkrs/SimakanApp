@@ -66,7 +66,36 @@ export class TransactionService {
     return transactionId;
   }
 
-  async deleteTransaction(transactionId: number, deletedBy?: number): Promise<void> {
+  async updateTransaction(id: number | string, input: Partial<CreateTransactionInput> & { updated_by?: number | string }): Promise<void> {
+    await this.db.withTransactionAsync(async () => {
+      const existing = await this.transactionRepo.findById(id);
+      if (!existing) {
+        throw new Error('Transaksi tidak ditemukan');
+      }
+
+      // Reverse cash for existing transaction
+      if (existing.transaction_type === 'IN') {
+        await this.cashRepo.reverseIncome(existing.cash_id, existing.nominal);
+      } else {
+        await this.cashRepo.reverseExpense(existing.cash_id, existing.nominal);
+      }
+
+      // Apply new cash
+      const newType = input.transaction_type ?? existing.transaction_type;
+      const newNominal = input.nominal ?? existing.nominal;
+      const cashId = input.cash_id ?? existing.cash_id;
+
+      if (newType === 'IN') {
+        await this.cashRepo.addIncome(cashId, newNominal);
+      } else {
+        await this.cashRepo.addExpense(cashId, newNominal);
+      }
+
+      await this.transactionRepo.update(id, input);
+    });
+  }
+
+  async deleteTransaction(transactionId: number | string, deletedBy?: number | string): Promise<void> {
     await this.db.withTransactionAsync(async () => {
       const transaction = await this.transactionRepo.findById(transactionId);
       if (!transaction) {
@@ -95,7 +124,7 @@ export class TransactionService {
 
           await this.stockMovementRepo.create({
             itemId: transaction.item_id,
-            transactionId,
+            transactionId: typeof transactionId === 'number' ? transactionId : 0,
             movementType: 'ADJUSTMENT',
             quantity: transaction.quantity,
             stockBefore,
@@ -121,7 +150,7 @@ export class TransactionService {
     return this.transactionRepo.findByDateRange(startDate, endDate);
   }
 
-  async getTransactionDetail(id: number): Promise<TransactionWithCategory | null> {
+  async getTransactionDetail(id: number | string): Promise<TransactionWithCategory | null> {
     return this.transactionRepo.findById(id);
   }
 }

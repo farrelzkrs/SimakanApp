@@ -3,10 +3,10 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
+    "start": "node ./scripts/start-dev.js",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "node ./scripts/start-dev.js --android",
+    "ios": "node ./scripts/start-dev.js --ios",
     "web": "expo start --web",
     "lint": "expo lint"
   },

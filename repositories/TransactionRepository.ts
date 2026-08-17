@@ -17,7 +17,7 @@ export class TransactionRepository {
     );
   }
 
-  async findById(id: number): Promise<TransactionWithCategory | null> {
+  async findById(id: number | string): Promise<TransactionWithCategory | null> {
     return this.db.getFirstAsync<TransactionWithCategory>(
       `SELECT t.*, c.name as category_name, c.icon as category_icon, c.color as category_color 
        FROM transactions t 
@@ -93,7 +93,38 @@ export class TransactionRepository {
     return result.lastInsertRowId;
   }
 
-  async softDelete(id: number, deletedBy?: number): Promise<void> {
+  async update(id: number | string, input: Partial<CreateTransactionInput> & { updated_by?: number | string }): Promise<void> {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (input.transaction_type !== undefined) { updates.push('transaction_type = ?'); values.push(input.transaction_type); }
+    if (input.category_id !== undefined) { updates.push('category_id = ?'); values.push(input.category_id); }
+    if (input.item_id !== undefined) { updates.push('item_id = ?'); values.push(input.item_id); }
+    if (input.quantity !== undefined) { updates.push('quantity = ?'); values.push(input.quantity); }
+    if (input.unit_price !== undefined) { updates.push('unit_price = ?'); values.push(input.unit_price); }
+    if (input.nominal !== undefined) { updates.push('nominal = ?'); values.push(input.nominal); }
+    if (input.payment_method !== undefined) { updates.push('payment_method = ?'); values.push(input.payment_method); }
+    if (input.description !== undefined) { updates.push('description = ?'); values.push(input.description); }
+
+    if (updates.length === 0) return;
+
+    updates.push('updated_at = ?');
+    values.push(toSQLiteDateTime());
+
+    if (input.updated_by) {
+      updates.push('updated_by = ?');
+      values.push(input.updated_by);
+    }
+
+    values.push(id);
+
+    await this.db.runAsync(
+      `UPDATE transactions SET ${updates.join(', ')} WHERE id = ?`,
+      values
+    );
+  }
+
+  async softDelete(id: number | string, deletedBy?: number | string): Promise<void> {
     await this.db.runAsync(
       `UPDATE transactions SET 
         is_deleted = 1, 
