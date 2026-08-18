@@ -1,27 +1,26 @@
-import { InventoryItem, useInventory } from '@/context/InventoryContext';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
+  View,
   Text,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
   TouchableWithoutFeedback,
-  View,
+  Keyboard,
+  Pressable,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useInventory, InventoryItem } from '@/context/InventoryContext';
 
 export interface OrderFormData {
   id?: string;
   name: string;
-  customerName: string;
   category: string;
   stock: number;
   quantity: number;
@@ -29,6 +28,8 @@ export interface OrderFormData {
   price: number;
   paymentMethod: 'Lunas' | 'Hutang';
   transactionType: 'IN' | 'OUT';
+  debtorName?: string;
+  debtStatus?: 'Belum Lunas' | 'Lunas';
 }
 
 export interface OrderModalProps {
@@ -51,7 +52,7 @@ const CATEGORY_SUGGESTIONS = [
   'Operasional',
 ];
 
-const UNIT_OPTIONS = ['Pcs', 'Dus', 'Pack'];
+const UNIT_OPTIONS = ['Pcs', 'Cup', 'Kg', 'Pack', 'Karton', 'Box', 'Porsi', 'Unit', 'Rim'];
 
 export default function OrderModal({
   visible,
@@ -67,24 +68,26 @@ export default function OrderModal({
 
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
   const [name, setName] = useState('');
-  const [customerName, setCustomerName] = useState('');
   const [category, setCategory] = useState('Bahan Baku');
   const [stock, setStock] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState('Pcs');
-  const [pcsPerUnit, setPcsPerUnit] = useState(1);
   const [price, setPrice] = useState(0);
   const [priceInput, setPriceInput] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Lunas' | 'Hutang'>('Lunas');
+  const [debtorName, setDebtorName] = useState('');
+  const [debtStatus, setDebtStatus] = useState<'Belum Lunas' | 'Lunas'>('Belum Lunas');
   const [transactionType, setTransactionType] = useState<'IN' | 'OUT'>(defaultType);
 
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [pickerSearchQuery, setPickerSearchQuery] = useState('');
 
+  // Filter inventory items for Pengeluaran search query
   const matchingExpenseItems = inventoryItems.filter((item) =>
     item.name.toLowerCase().includes(name.trim().toLowerCase())
   );
 
+  // Filter inventory items for Pemasukan dedicated picker search bar
   const matchingPickerItems = inventoryItems.filter(
     (item) =>
       item.name.toLowerCase().includes(pickerSearchQuery.trim().toLowerCase()) ||
@@ -100,15 +103,15 @@ export default function OrderModal({
       setPickerSearchQuery('');
       if (initialData) {
         setName(initialData.name || '');
-        setCustomerName(initialData.customerName || '');
         setCategory(initialData.category || 'Bahan Baku');
         setStock(initialData.stock ?? 0);
         setQuantity(initialData.quantity || 1);
-        setUnit('Pcs'); // Always edit in Pcs
-        setPcsPerUnit(1);
+        setUnit(initialData.unit || 'Pcs');
         setPrice(initialData.price || 0);
         setPriceInput(initialData.price ? String(initialData.price) : '');
         setPaymentMethod(initialData.paymentMethod === 'Hutang' ? 'Hutang' : 'Lunas');
+        setDebtorName(initialData.debtorName || '');
+        setDebtStatus(initialData.debtStatus || 'Belum Lunas');
         setTransactionType(initialData.transactionType || defaultType);
 
         const matched = inventoryItems.find(
@@ -117,15 +120,15 @@ export default function OrderModal({
         if (matched) setSelectedInventoryItem(matched);
       } else {
         setName('');
-        setCustomerName('');
         setCategory('Bahan Baku');
         setStock(0);
         setQuantity(1);
         setUnit('Pcs');
-        setPcsPerUnit(1);
         setPrice(0);
         setPriceInput('');
         setPaymentMethod('Lunas');
+        setDebtorName('');
+        setDebtStatus('Belum Lunas');
         setTransactionType(defaultType);
         setSelectedInventoryItem(null);
       }
@@ -133,6 +136,7 @@ export default function OrderModal({
   }, [visible, initialData, defaultType, inventoryItems]);
 
   const handleSelectInventoryItem = (item: InventoryItem) => {
+    // RESTRICTION: Operasional category cannot be selected for Pemasukan (Income / IN)!
     if (transactionType === 'IN' && item.category === 'Operasional') {
       Alert.alert(
         'Kategori Operasional Dikunci',
@@ -145,10 +149,9 @@ export default function OrderModal({
     setName(item.name);
     setCategory(item.category);
     setStock(item.stock);
-    setUnit('Pcs'); // Load from inventory as Pcs
-    setPcsPerUnit(1);
-    setPrice(item.sellingPrice > 0 ? item.sellingPrice : item.price);
-    setPriceInput(item.sellingPrice > 0 ? String(item.sellingPrice) : (item.price ? String(item.price) : '0'));
+    setUnit(item.unit);
+    setPrice(item.price);
+    setPriceInput(item.price ? String(item.price) : '0');
     setShowSearchDropdown(false);
     setPickerSearchQuery('');
   };
@@ -183,6 +186,7 @@ export default function OrderModal({
       return;
     }
 
+    // STRICT CHECK FOR IN (PEMASUKAN): Must be a registered item in Inventory!
     if (transactionType === 'IN' && !isExactItemInInventory) {
       Alert.alert(
         'Pemasukan Ditolak',
@@ -191,6 +195,7 @@ export default function OrderModal({
       return;
     }
 
+    // Double check Operasional restriction for Pemasukan
     if (transactionType === 'IN' && category === 'Operasional') {
       Alert.alert(
         'Transaksi Ditolak',
@@ -199,44 +204,45 @@ export default function OrderModal({
       return;
     }
 
-    if (transactionType === 'IN' && paymentMethod === 'Hutang' && !customerName.trim()) {
+    if (paymentMethod === 'Hutang' && !debtorName.trim()) {
       Alert.alert(
-        'Nama Pemesan Wajib',
-        'Untuk pembayaran Hutang, nama pemesan wajib diisi agar tercatat di daftar hutang.'
+        'Nama Penghutang Wajib Diisi',
+        transactionType === 'IN'
+          ? 'Silakan masukkan nama pelanggan yang berhutang.'
+          : 'Silakan masukkan nama pihak / supplier terkait.'
       );
       return;
     }
 
     const parsedPrice = parseFloat(priceInput.replace(/[^0-9]/g, '')) || price || 0;
-    
-    // Convert Dus/Pack to Pcs if applicable
-    const isPackOrDus = (unit === 'Dus' || unit === 'Pack');
-    const finalQuantity = isPackOrDus ? quantity * pcsPerUnit : quantity;
-    const finalPrice = isPackOrDus ? parsedPrice / pcsPerUnit : parsedPrice;
 
     if (transactionType === 'IN') {
-      adjustStockByItemName(name.trim(), -finalQuantity);
+      // Pemasukan (Penjualan): Deduct inventory stock
+      adjustStockByItemName(name.trim(), -quantity);
     } else {
+      // Pengeluaran (Pembelian / Restock):
+      // Automatically register new item in inventory or restock existing item!
       registerOrRestockExpenseItem({
         name: name.trim(),
         category: category.trim() || 'Bahan Baku',
-        quantity: finalQuantity,
-        unit: 'Pcs',
-        price: finalPrice,
+        quantity,
+        unit: unit.trim() || 'Pcs',
+        price: parsedPrice,
       });
     }
 
     onSave({
       id: initialData?.id,
       name: name.trim(),
-      customerName: customerName.trim() || 'Admin',
       category: category.trim() || 'Bahan Baku',
       stock,
-      quantity: finalQuantity,
-      unit: 'Pcs',
-      price: finalPrice,
+      quantity,
+      unit: unit.trim() || 'Pcs',
+      price: parsedPrice,
       paymentMethod,
       transactionType,
+      debtorName: paymentMethod === 'Hutang' ? debtorName.trim() : undefined,
+      debtStatus: paymentMethod === 'Hutang' ? debtStatus : 'Lunas',
     });
 
     onClose();
@@ -284,45 +290,31 @@ export default function OrderModal({
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.modalContainer}>
+              {/* Sheet Drag Indicator Handle */}
               <View style={styles.handleBar} />
-
-              <View style={styles.header}>
-                <View style={styles.headerRow}>
-                  <View style={styles.headerIconBadge}>
-                    <Ionicons
-                      name={transactionType === 'IN' ? 'cart-outline' : 'receipt-outline'}
-                      size={22}
-                      color="#14A39F"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.title}>
-                      {isEditing
-                        ? 'Edit Transaksi'
-                        : transactionType === 'OUT'
-                        ? 'Tambah Pengeluaran'
-                        : 'Tambah Pemasukan'}
-                    </Text>
-                    <Text style={styles.subtitle}>
-                      {transactionType === 'OUT'
-                        ? 'Pengeluaran otomatis mendaftarkan stok ke Inventori'
-                        : 'Pilih barang terdaftar dari Inventori'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity activeOpacity={0.7} style={styles.closeBtn} onPress={onClose}>
-                    <Ionicons name="close" size={24} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.divider} />
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.scrollContent}
               >
-                {/* Switcher Tipe Transaksi */}
+                {/* Header */}
+                <View style={styles.header}>
+                  <Text style={styles.title}>
+                    {isEditing
+                      ? 'Edit Transaksi'
+                      : transactionType === 'OUT'
+                      ? 'Tambah Pengeluaran (Belanja Barang)'
+                      : 'Tambah Pemasukan (Penjualan)'}
+                  </Text>
+                  <Text style={styles.subtitle}>
+                    {transactionType === 'OUT'
+                      ? 'Input pengeluaran barang akan otomatis mendaftarkan stok ke Inventori'
+                      : 'Pilih barang terdaftar dari Inventori (Gunakan fitur cari di bawah)'}
+                  </Text>
+                </View>
+
+                {/* Switcher Tipe Transaksi (Pemasukan vs Pengeluaran) */}
                 <View style={styles.typeToggleContainer}>
                   <TouchableOpacity
                     activeOpacity={0.8}
@@ -378,28 +370,7 @@ export default function OrderModal({
                   </TouchableOpacity>
                 </View>
 
-                {/* FIELD: NAMA PEMESAN (Hanya untuk Pemasukan) */}
-                {transactionType === 'IN' && (
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>
-                      Nama Pemesan {paymentMethod === 'Hutang' && <Text style={styles.requiredStar}>*</Text>}
-                    </Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="Contoh: Pak Budi, Bu Ani, Admin..."
-                      placeholderTextColor="#94A3B8"
-                      value={customerName}
-                      onChangeText={setCustomerName}
-                    />
-                    {paymentMethod === 'Hutang' && !customerName.trim() && (
-                      <Text style={{ fontSize: 11, color: '#D97706', fontWeight: '600', marginTop: 4 }}>
-                        ⚠️ Wajib diisi untuk pembayaran Hutang
-                      </Text>
-                    )}
-                  </View>
-                )}
-
-                {/* FIELD: PILIH BARANG */}
+                {/* FIELD 1: PILIH BARANG (PEMASUKAN = LOCKED PICKER ONLY WITH SEARCH BAR) */}
                 <View style={styles.formGroup}>
                   <View style={styles.labelHeaderRow}>
                     <Text style={styles.label}>
@@ -412,6 +383,7 @@ export default function OrderModal({
                   </View>
 
                   {transactionType === 'IN' ? (
+                    /* PEMASUKAN MODE: STRICT PICKER TRIGGER CARD */
                     <TouchableOpacity
                       activeOpacity={0.85}
                       style={[
@@ -436,7 +408,7 @@ export default function OrderModal({
                           {selectedInventoryItem ? (
                             <Text style={styles.pickerTriggerSub}>
                               {selectedInventoryItem.category} • Stok: {selectedInventoryItem.stock}{' '}
-                              {selectedInventoryItem.unit} • {formatRupiah(selectedInventoryItem.sellingPrice > 0 ? selectedInventoryItem.sellingPrice : selectedInventoryItem.price)}
+                              {selectedInventoryItem.unit} • {formatRupiah(selectedInventoryItem.price)}
                             </Text>
                           ) : (
                             <Text style={styles.pickerTriggerLockedNotice}>
@@ -453,6 +425,7 @@ export default function OrderModal({
                       />
                     </TouchableOpacity>
                   ) : (
+                    /* PENGELUARAN MODE: FREE TEXT EDITABLE SEARCH INPUT */
                     <View style={styles.searchInputBox}>
                       <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
                       <TextInput
@@ -474,8 +447,10 @@ export default function OrderModal({
                     </View>
                   )}
 
+                  {/* DROPDOWN CONTAINER WITH INTEGRATED LIVE SEARCH BAR */}
                   {showSearchDropdown && (
                     <View style={styles.searchDropdownContainer}>
+                      {/* DEDICATED LIVE SEARCH INPUT INSIDE DROPDOWN FOR PEMASUKAN */}
                       {transactionType === 'IN' && (
                         <View style={styles.dropdownSearchInputBox}>
                           <Ionicons name="search" size={16} color="#14A39F" style={{ marginRight: 8 }} />
@@ -578,6 +553,7 @@ export default function OrderModal({
                     </View>
                   )}
 
+                  {/* STATUS BADGE INDICATOR */}
                   {name.trim().length > 0 && (
                     <View style={{ marginTop: 6 }}>
                       {isExactItemInInventory ? (
@@ -601,7 +577,7 @@ export default function OrderModal({
                   )}
                 </View>
 
-                {/* FIELD: KATEGORI */}
+                {/* FIELD 2: KATEGORI BARANG (OPERASIONAL IS LOCKED FOR PEMASUKAN) */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Kategori Barang</Text>
                   <ScrollView
@@ -642,12 +618,13 @@ export default function OrderModal({
                   </ScrollView>
                 </View>
 
-                {/* FIELD: HARGA PER PICIS */}
+                {/* FIELD 3: HARGA PER PICIS / UNIT (RP) */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>
                     Harga per Picis / Unit (Rp) <Text style={styles.requiredStar}>*</Text>
                   </Text>
                   {transactionType === 'IN' && selectedInventoryItem ? (
+                    /* Read-Only Preview for Pemasukan since Price comes from Inventory */
                     <View style={styles.readOnlyPriceBox}>
                       <Text style={styles.readOnlyPriceTextLabel}>
                         {formatRupiah(price)} / {unit}
@@ -673,8 +650,9 @@ export default function OrderModal({
                   )}
                 </View>
 
-                {/* FIELD: JUMLAH & SATUAN */}
+                {/* FIELD 4 & 5: JUMLAH (QTY) & SATUAN */}
                 <View style={styles.rowGrid}>
+                  {/* Stepper Kuantitas */}
                   <View style={[styles.formGroup, { flex: 1.2, marginRight: 10 }]}>
                     <Text style={styles.label}>Jumlah (Qty)</Text>
                     <View style={styles.stepperContainer}>
@@ -698,6 +676,7 @@ export default function OrderModal({
                     </View>
                   </View>
 
+                  {/* Satuan Unit Selection */}
                   <View style={[styles.formGroup, { flex: 1 }]}>
                     <Text style={styles.label}>Satuan</Text>
                     <ScrollView
@@ -705,11 +684,7 @@ export default function OrderModal({
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={{ gap: 4 }}
                     >
-                      {UNIT_OPTIONS.map((u) => {
-                        // Jika IN (penjualan), hide Dus/Pack jika tidak ingin dijual dalam bentuk dus.
-                        // User request: "waktu dijual pakai pcs saja"
-                        if (transactionType === 'IN' && (u === 'Dus' || u === 'Pack')) return null;
-
+                      {UNIT_OPTIONS.slice(0, 5).map((u) => {
                         const isSelected = unit === u;
                         return (
                           <TouchableOpacity
@@ -733,31 +708,7 @@ export default function OrderModal({
                   </View>
                 </View>
 
-                {/* PCS PER UNIT CONVERSION (Only for Dus/Pack when OUT) */}
-                {(unit === 'Dus' || unit === 'Pack') && transactionType === 'OUT' && (
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Satu {unit} isi berapa Pcs? <Text style={styles.requiredStar}>*</Text></Text>
-                    <View style={styles.stepperContainer}>
-                      <TouchableOpacity style={styles.stepperBtnMinus} onPress={() => setPcsPerUnit(s => Math.max(1, s - 1))}>
-                        <Ionicons name="remove" size={18} color="#FFFFFF" />
-                      </TouchableOpacity>
-                      <TextInput
-                        style={[styles.stepperValueText, { flex: 1, textAlign: 'center' }]}
-                        keyboardType="numeric"
-                        value={String(pcsPerUnit)}
-                        onChangeText={(v) => setPcsPerUnit(parseInt(v.replace(/[^0-9]/g, ''), 10) || 1)}
-                      />
-                      <TouchableOpacity style={styles.stepperBtnPlus} onPress={() => setPcsPerUnit(s => s + 1)}>
-                        <Ionicons name="add" size={18} color="#FFFFFF" />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                      Akan otomatis dicatat sebagai {quantity * pcsPerUnit} Pcs di Inventori.
-                    </Text>
-                  </View>
-                )}
-
-                {/* SUBTOTAL */}
+                {/* TOTAL SUBTOTAL PREVIEW */}
                 <View style={styles.subtotalCard}>
                   <Text style={styles.subtotalLabel}>
                     Total Transaksi ({quantity} {unit} @ {formatRupiah(price || 0)})
@@ -774,7 +725,7 @@ export default function OrderModal({
 
                 {/* METODE PEMBAYARAN */}
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Tipe Pembayaran</Text>
+                  <Text style={styles.label}>Metode Pembayaran</Text>
                   <View style={styles.paymentMethodRow}>
                     <TouchableOpacity
                       activeOpacity={0.8}
@@ -796,7 +747,7 @@ export default function OrderModal({
                           paymentMethod === 'Lunas' && styles.paymentChipTextActive,
                         ]}
                       >
-                        Tunai / Lunas
+                        Lunas
                       </Text>
                     </TouchableOpacity>
 
@@ -825,38 +776,63 @@ export default function OrderModal({
                     </TouchableOpacity>
                   </View>
                 </View>
-              </ScrollView>
 
-              {/* ACTIONS */}
-              <View style={styles.actionRow}>
-                {isEditing && onDelete && (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.deleteBtn}
-                    onPress={handleDelete}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                  </TouchableOpacity>
+                {/* DYNAMIC FIELD: NAMA PENGHUTANG */}
+                {paymentMethod === 'Hutang' && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>
+                      Nama Yang Berhutang <Text style={styles.requiredStar}>*</Text>
+                    </Text>
+                    <View style={styles.debtorInputBox}>
+                      <Ionicons name="person" size={18} color="#D97706" style={{ marginRight: 8 }} />
+                      <TextInput
+                        style={styles.debtorInputText}
+                        placeholder={
+                          transactionType === 'IN'
+                            ? 'Nama Pelanggan (cth: Pak Budi, Mas Fajar)...'
+                            : 'Nama Supplier / Pihak Terkait...'
+                        }
+                        placeholderTextColor="#A1A1AA"
+                        value={debtorName}
+                        onChangeText={setDebtorName}
+                      />
+                    </View>
+                    <Text style={styles.debtorHintText}>
+                      📌 Transaksi ini akan otomatis masuk ke menu Daftar Hutang.
+                    </Text>
+                  </View>
                 )}
 
-                <TouchableOpacity activeOpacity={0.8} style={styles.cancelBtn} onPress={onClose}>
-                  <Text style={styles.cancelBtnText}>Batal</Text>
-                </TouchableOpacity>
+                {/* ACTIONS */}
+                <View style={styles.actionRow}>
+                  {isEditing && onDelete && (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.deleteBtn}
+                      onPress={handleDelete}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                    </TouchableOpacity>
+                  )}
 
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={[
-                    styles.saveBtn,
-                    transactionType === 'IN' ? styles.saveBtnIn : styles.saveBtnOut,
-                  ]}
-                  onPress={handleSave}
-                >
-                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.saveBtnText}>
-                    {isEditing ? 'Perbarui Transaksi' : 'Simpan Transaksi'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity activeOpacity={0.8} style={styles.cancelBtn} onPress={onClose}>
+                    <Text style={styles.cancelBtnText}>Batal</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[
+                      styles.saveBtn,
+                      transactionType === 'IN' ? styles.saveBtnIn : styles.saveBtnOut,
+                    ]}
+                    onPress={handleSave}
+                  >
+                    <Text style={styles.saveBtnText}>
+                      {isEditing ? 'Perbarui Transaksi' : 'Simpan Transaksi'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
@@ -900,38 +876,17 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   header: {
-    marginBottom: 0,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#CCFBF1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: '800',
     color: '#0F172A',
   },
   subtitle: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 1,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 14,
+    marginTop: 2,
   },
   typeToggleContainer: {
     flexDirection: 'row',
@@ -973,34 +928,19 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 6,
-  },
-  fieldHint: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 4,
   },
   requiredStar: {
     color: '#EF4444',
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0F172A',
   },
   addInventoryLink: {
     fontSize: 12,
     fontWeight: '700',
     color: '#14A39F',
   },
+  /* PICKER TRIGGER BOX FOR PEMASUKAN */
   pickerTriggerBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1372,6 +1312,28 @@ const styles = StyleSheet.create({
   paymentChipTextActive: {
     color: '#FFFFFF',
   },
+  debtorInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+  },
+  debtorInputText: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  debtorHintText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#D97706',
+    marginTop: 4,
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1400,11 +1362,9 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 2,
-    flexDirection: 'row',
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   saveBtnIn: {
     backgroundColor: '#16A34A',

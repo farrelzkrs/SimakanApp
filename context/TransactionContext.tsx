@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OrderFormData } from '@/components/OrderModal';
+
+const STORAGE_KEY = '@simakan_transactions_v2';
 
 export interface TransactionItem {
   id: string;
   name: string;
-  customerName: string;
   category: string;
   quantity: number;
   unit: string;
@@ -12,10 +14,12 @@ export interface TransactionItem {
   total: number;
   paymentMethod: 'Lunas' | 'Hutang';
   transactionType: 'IN' | 'OUT';
-  monthKey: string;
-  weekKey: string;
-  dateKey: string;
-  dayId: string;
+  debtorName?: string;
+  debtStatus?: 'Belum Lunas' | 'Lunas';
+  monthKey: string; // e.g. "2026-08"
+  weekKey: string;  // e.g. "W1", "W2", "W3", "W4", "W5"
+  dateKey: string;  // e.g. "2026-08-15"
+  dayId: string;    // e.g. "day-sat", "day-wed"
   fullDateText: string;
   timeText: string;
   timestamp: number;
@@ -24,7 +28,10 @@ export interface TransactionItem {
 interface TransactionContextType {
   transactions: TransactionItem[];
   addTransaction: (data: OrderFormData, targetDayId?: string, customDate?: Date) => void;
+  updateTransaction: (id: string, data: Partial<OrderFormData>) => void;
   deleteTransaction: (id: string) => void;
+  toggleDebtStatus: (id: string) => void;
+  settleAllDebtsForPerson: (debtorName: string) => void;
   getTransactionsByDay: (dayId: string, type?: 'IN' | 'OUT') => TransactionItem[];
   getTotalByType: (type: 'IN' | 'OUT', dayId?: string) => number;
   getDebtTransactions: () => TransactionItem[];
@@ -32,10 +39,11 @@ interface TransactionContextType {
 }
 
 const INITIAL_TRANSACTIONS: TransactionItem[] = [
+  // --- AGUSTUS 2026: MINGGU KE-3 (15 - 21 Ags) ---
+  // Sabtu, 15 Agustus 2026 (Pemasukan)
   {
     id: 'trx-inc-1',
     name: 'Kopi Susu Aren Special',
-    customerName: 'Admin',
     category: 'Minuman',
     quantity: 15,
     unit: 'Cup',
@@ -43,6 +51,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 330000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -54,7 +63,6 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-inc-2',
     name: 'Roti Bakar Keju Cokelat',
-    customerName: 'Admin',
     category: 'Makanan',
     quantity: 8,
     unit: 'Porsi',
@@ -62,6 +70,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 200000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -71,9 +80,48 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timestamp: new Date('2026-08-15T15:10:00').getTime(),
   },
   {
+    id: 'trx-inc-hutang-1',
+    name: 'Kopi Susu Aren Special',
+    category: 'Minuman',
+    quantity: 3,
+    unit: 'Cup',
+    price: 22000,
+    total: 66000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Pak Budi (Guru SMA)',
+    debtStatus: 'Belum Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
+    dayId: 'day-sat',
+    fullDateText: 'Sabtu, 15 Agustus 2026',
+    timeText: '15:30 WIB',
+    timestamp: new Date('2026-08-15T15:30:00').getTime(),
+  },
+  {
+    id: 'trx-inc-hutang-1b',
+    name: 'Roti Bakar Keju Cokelat',
+    category: 'Makanan',
+    quantity: 2,
+    unit: 'Porsi',
+    price: 25000,
+    total: 50000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Pak Budi (Guru SMA)',
+    debtStatus: 'Belum Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W3',
+    dateKey: '2026-08-15',
+    dayId: 'day-sat',
+    fullDateText: 'Sabtu, 15 Agustus 2026',
+    timeText: '15:40 WIB',
+    timestamp: new Date('2026-08-15T15:40:00').getTime(),
+  },
+  {
     id: 'trx-inc-7',
     name: 'Croissant Butter Warm',
-    customerName: 'Admin',
     category: 'Snack',
     quantity: 12,
     unit: 'Pcs',
@@ -81,6 +129,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 216000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -89,10 +138,10 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '16:45 WIB',
     timestamp: new Date('2026-08-15T16:45:00').getTime(),
   },
+  // Sabtu, 15 Agustus 2026 (Pengeluaran)
   {
     id: 'trx-exp-1',
     name: 'Biji Kopi Arabika Gayo 1kg',
-    customerName: 'Admin',
     category: 'Bahan Baku',
     quantity: 2,
     unit: 'Kg',
@@ -100,6 +149,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 250000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -111,7 +161,6 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-2',
     name: 'Susu UHT Full Cream 1L',
-    customerName: 'Admin',
     category: 'Bahan Baku',
     quantity: 10,
     unit: 'Karton',
@@ -119,6 +168,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 180000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W3',
     dateKey: '2026-08-15',
@@ -127,10 +177,11 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '10:00 WIB',
     timestamp: new Date('2026-08-15T10:00:00').getTime(),
   },
+
+  // Jumat, 14 Agustus 2026
   {
     id: 'trx-inc-8',
     name: 'Matcha Latte Ice',
-    customerName: 'Admin',
     category: 'Minuman',
     quantity: 14,
     unit: 'Cup',
@@ -138,6 +189,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 336000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-14',
@@ -147,9 +199,28 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timestamp: new Date('2026-08-14T13:15:00').getTime(),
   },
   {
+    id: 'trx-inc-hutang-2',
+    name: 'Nasi Goreng Spesial Telur',
+    category: 'Makanan',
+    quantity: 2,
+    unit: 'Porsi',
+    price: 28000,
+    total: 56000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Mas Fajar (Santri)',
+    debtStatus: 'Belum Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-14',
+    dayId: 'day-fri',
+    fullDateText: 'Jumat, 14 Agustus 2026',
+    timeText: '12:00 WIB',
+    timestamp: new Date('2026-08-14T12:00:00').getTime(),
+  },
+  {
     id: 'trx-exp-4',
     name: 'Sirup Karamel 750ml',
-    customerName: 'Admin',
     category: 'Bahan Baku',
     quantity: 3,
     unit: 'Botol',
@@ -157,6 +228,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 195000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-14',
@@ -165,10 +237,11 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '11:20 WIB',
     timestamp: new Date('2026-08-14T11:20:00').getTime(),
   },
+
+  // Rabu, 12 Agustus 2026
   {
     id: 'trx-inc-3',
     name: 'Espresso Double Shot',
-    customerName: 'Admin',
     category: 'Minuman',
     quantity: 10,
     unit: 'Cup',
@@ -176,6 +249,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 180000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-12',
@@ -187,7 +261,6 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-inc-4',
     name: 'Nasi Goreng Spesial Telur',
-    customerName: 'Admin',
     category: 'Makanan',
     quantity: 6,
     unit: 'Porsi',
@@ -195,6 +268,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 168000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-12',
@@ -206,7 +280,6 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-exp-3',
     name: 'Cup Plastik Sablon 16oz',
-    customerName: 'Pak Budi',
     category: 'Kemasan',
     quantity: 5,
     unit: 'Pack',
@@ -214,6 +287,8 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 175000,
     paymentMethod: 'Hutang',
     transactionType: 'OUT',
+    debtorName: 'CV Plastik Jaya (Supplier)',
+    debtStatus: 'Belum Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-12',
@@ -222,10 +297,11 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timeText: '13:45 WIB',
     timestamp: new Date('2026-08-12T13:45:00').getTime(),
   },
+
+  // Senin, 10 Agustus 2026
   {
     id: 'trx-inc-5',
     name: 'Caramel Macchiato Large',
-    customerName: 'Admin',
     category: 'Minuman',
     quantity: 8,
     unit: 'Cup',
@@ -233,6 +309,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 208000,
     paymentMethod: 'Lunas',
     transactionType: 'IN',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-10',
@@ -242,9 +319,28 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     timestamp: new Date('2026-08-10T10:15:00').getTime(),
   },
   {
+    id: 'trx-inc-hutang-3',
+    name: 'Roti Bakar Keju Cokelat',
+    category: 'Makanan',
+    quantity: 4,
+    unit: 'Porsi',
+    price: 25000,
+    total: 100000,
+    paymentMethod: 'Hutang',
+    transactionType: 'IN',
+    debtorName: 'Bu Ani (Staf Yayasan)',
+    debtStatus: 'Lunas',
+    monthKey: '2026-08',
+    weekKey: 'W2',
+    dateKey: '2026-08-10',
+    dayId: 'day-mon',
+    fullDateText: 'Senin, 10 Agustus 2026',
+    timeText: '11:00 WIB',
+    timestamp: new Date('2026-08-10T11:00:00').getTime(),
+  },
+  {
     id: 'trx-exp-5',
     name: 'Gas Elpiji 12kg',
-    customerName: 'Admin',
     category: 'Operasional',
     quantity: 1,
     unit: 'Tabung',
@@ -252,89 +348,14 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     total: 215000,
     paymentMethod: 'Lunas',
     transactionType: 'OUT',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-10',
     dayId: 'day-mon',
     fullDateText: 'Senin, 10 Agustus 2026',
-    timeText: '08:45 WIB',
-    timestamp: new Date('2026-08-10T08:45:00').getTime(),
-  },
-  {
-    id: 'trx-inc-6',
-    name: 'Americano Ice Segar',
-    customerName: 'Admin',
-    category: 'Minuman',
-    quantity: 12,
-    unit: 'Cup',
-    price: 16000,
-    total: 192000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    monthKey: '2026-08',
-    weekKey: 'W1',
-    dateKey: '2026-08-04',
-    dayId: 'day-tue',
-    fullDateText: 'Selasa, 04 Agustus 2026',
-    timeText: '09:40 WIB',
-    timestamp: new Date('2026-08-04T09:40:00').getTime(),
-  },
-  {
-    id: 'trx-exp-6',
-    name: 'Sedotan Steril & Tissue Paper',
-    customerName: 'Admin',
-    category: 'Kemasan',
-    quantity: 4,
-    unit: 'Pack',
-    price: 25000,
-    total: 100000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    monthKey: '2026-08',
-    weekKey: 'W1',
-    dateKey: '2026-08-04',
-    dayId: 'day-tue',
-    fullDateText: 'Selasa, 04 Agustus 2026',
-    timeText: '11:00 WIB',
-    timestamp: new Date('2026-08-04T11:00:00').getTime(),
-  },
-  {
-    id: 'trx-inc-jul-1',
-    name: 'Ice Lemon Tea Jumbo',
-    customerName: 'Admin',
-    category: 'Minuman',
-    quantity: 20,
-    unit: 'Cup',
-    price: 15000,
-    total: 300000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    monthKey: '2026-07',
-    weekKey: 'W4',
-    dateKey: '2026-07-25',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 25 Juli 2026',
-    timeText: '15:30 WIB',
-    timestamp: new Date('2026-07-25T15:30:00').getTime(),
-  },
-  {
-    id: 'trx-exp-jul-1',
-    name: 'Listrik & Token PLN Juli',
-    customerName: 'Admin',
-    category: 'Operasional',
-    quantity: 1,
-    unit: 'Bulan',
-    price: 350000,
-    total: 350000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    monthKey: '2026-07',
-    weekKey: 'W4',
-    dateKey: '2026-07-25',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 25 Juli 2026',
-    timeText: '10:00 WIB',
-    timestamp: new Date('2026-07-25T10:00:00').getTime(),
+    timeText: '09:00 WIB',
+    timestamp: new Date('2026-08-10T09:00:00').getTime(),
   },
 ];
 
@@ -343,15 +364,43 @@ const TransactionContext = createContext<TransactionContextType | undefined>(und
 export function TransactionProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
 
+  // Load persistent transactions on mount
+  useEffect(() => {
+    async function loadStoredTransactions() {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTransactions(parsed);
+          }
+        }
+      } catch (err) {
+        console.log('Error loading transactions from storage:', err);
+      }
+    }
+    loadStoredTransactions();
+  }, []);
+
+  const saveTransactions = async (items: TransactionItem[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (err) {
+      console.log('Error saving transactions to storage:', err);
+    }
+  };
+
   const addTransaction = (data: OrderFormData, targetDayId?: string, customDate?: Date) => {
     const qty = data.quantity || 1;
     const price = data.price || 0;
     const total = qty * price;
-    const assignedDayId = targetDayId || 'day-sat';
-
     const now = customDate || new Date();
+    const dayMap = ['day-sun', 'day-mon', 'day-tue', 'day-wed', 'day-thu', 'day-fri', 'day-sat'];
+    const assignedDayId = targetDayId || dayMap[now.getDay()];
+
     const timeText = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
     
+    // Format full date text
     const fullDateText = now.toLocaleDateString('id-ID', {
       weekday: 'long',
       day: 'numeric',
@@ -372,10 +421,13 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     else if (dateNum > 14) weekKey = 'W3';
     else if (dateNum > 7) weekKey = 'W2';
 
+    const isDebt = data.paymentMethod === 'Hutang';
+    const assignedDebtor = isDebt ? (data.debtorName?.trim() || 'Tanpa Nama') : undefined;
+    const assignedDebtStatus = isDebt ? (data.debtStatus || 'Belum Lunas') : 'Lunas';
+
     const newTrx: TransactionItem = {
       id: 'trx-' + Date.now(),
       name: data.name,
-      customerName: data.customerName || 'Admin',
       category: data.category || 'Umum',
       quantity: qty,
       unit: data.unit || 'Pcs',
@@ -383,6 +435,8 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       total: total,
       paymentMethod: data.paymentMethod || 'Lunas',
       transactionType: data.transactionType || 'IN',
+      debtorName: assignedDebtor,
+      debtStatus: assignedDebtStatus,
       monthKey,
       weekKey,
       dateKey,
@@ -392,11 +446,88 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       timestamp: now.getTime(),
     };
 
-    setTransactions((prev) => [newTrx, ...prev]);
+    setTransactions((prev) => {
+      const updated = [newTrx, ...prev];
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
+  const updateTransaction = (id: string, data: Partial<OrderFormData>) => {
+    setTransactions((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          const qty = data.quantity !== undefined ? data.quantity : item.quantity;
+          const price = data.price !== undefined ? data.price : item.price;
+          const total = qty * price;
+          const isDebt = (data.paymentMethod ?? item.paymentMethod) === 'Hutang';
+
+          return {
+            ...item,
+            name: data.name ?? item.name,
+            category: data.category ?? item.category,
+            quantity: qty,
+            unit: data.unit ?? item.unit,
+            price: price,
+            total: total,
+            paymentMethod: (data.paymentMethod ?? item.paymentMethod) as 'Lunas' | 'Hutang',
+            transactionType: (data.transactionType ?? item.transactionType) as 'IN' | 'OUT',
+            debtorName: isDebt ? (data.debtorName ?? item.debtorName ?? 'Tanpa Nama') : undefined,
+            debtStatus: isDebt ? (data.debtStatus ?? item.debtStatus ?? 'Belum Lunas') : 'Lunas',
+          };
+        }
+        return item;
+      });
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((item) => item.id !== id));
+    setTransactions((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
+  // Mark debt as Paid (Lunas) or toggle back to Belum Lunas
+  const toggleDebtStatus = (id: string) => {
+    setTransactions((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          const newStatus: 'Belum Lunas' | 'Lunas' =
+            item.debtStatus === 'Belum Lunas' ? 'Lunas' : 'Belum Lunas';
+          return {
+            ...item,
+            debtStatus: newStatus,
+            paymentMethod: newStatus === 'Lunas' ? ('Lunas' as const) : ('Hutang' as const),
+          };
+        }
+        return item;
+      });
+      saveTransactions(updated);
+      return updated;
+    });
+  };
+
+  // Settle all unpaid debts for a specific person in one action
+  const settleAllDebtsForPerson = (debtorName: string) => {
+    const target = debtorName.trim().toLowerCase();
+    setTransactions((prev) => {
+      const updated = prev.map((item) => {
+        if ((item.debtorName || '').trim().toLowerCase() === target) {
+          return {
+            ...item,
+            debtStatus: 'Lunas' as const,
+            paymentMethod: 'Lunas' as const,
+          };
+        }
+        return item;
+      });
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   const getTransactionsByDay = (dayId: string, type?: 'IN' | 'OUT') => {
@@ -418,11 +549,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
   };
 
   const markDebtAsPaid = (id: string) => {
-    setTransactions((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, paymentMethod: 'Lunas' as const } : t
-      )
-    );
+    toggleDebtStatus(id);
   };
 
   return (
@@ -430,7 +557,10 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       value={{
         transactions,
         addTransaction,
+        updateTransaction,
         deleteTransaction,
+        toggleDebtStatus,
+        settleAllDebtsForPerson,
         getTransactionsByDay,
         getTotalByType,
         getDebtTransactions,

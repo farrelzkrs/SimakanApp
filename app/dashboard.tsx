@@ -29,7 +29,7 @@ const WATERMARK_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d
 interface TransactionItem {
   id: string;
   name: string;
-  customerName: string;
+  debtorName: string;
   category: string;
   date: string;
   amount: number;
@@ -46,7 +46,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-1',
     name: 'Maju Jaya Coffee',
-    customerName: 'Admin',
+    debtorName: 'Admin',
     category: 'Penjualan',
     date: '4 Oktober 2020',
     amount: 2000,
@@ -61,7 +61,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-2',
     name: 'Zeus Motorworks',
-    customerName: 'Admin',
+    debtorName: 'Admin',
     category: 'Penjualan',
     date: '4 Oktober 2020',
     amount: 4000,
@@ -76,7 +76,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-3',
     name: 'Desain Freelance',
-    customerName: 'Admin',
+    debtorName: 'Admin',
     category: 'Penjualan',
     date: '4 Oktober 2020',
     amount: 1000,
@@ -91,7 +91,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-4',
     name: 'Uang Kos',
-    customerName: 'Pak Budi',
+    debtorName: 'Pak Budi',
     category: 'Uang Kos',
     date: '4 Oktober 2020',
     amount: 200,
@@ -106,7 +106,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-5',
     name: 'Netflix',
-    customerName: 'Admin',
+    debtorName: 'Admin',
     category: 'Operasional',
     date: '4 Oktober 2020',
     amount: 12,
@@ -121,7 +121,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
   {
     id: 'trx-6',
     name: 'Konsumsi',
-    customerName: 'Admin',
+    debtorName: 'Admin',
     category: 'Konsumsi',
     date: '4 Oktober 2020',
     amount: 250,
@@ -145,6 +145,22 @@ export default function DashboardScreen() {
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
   const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
+
+  // Live Real-Time Device Clock & Date
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    // Update live clock every 10 seconds to keep in sync with device
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const dayNumber = currentDate.getDate();
+  const dayName = currentDate.toLocaleDateString('id-ID', { weekday: 'long' });
+  const monthYearName = currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const timeFormatted = currentDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderFormData | null>(null);
@@ -188,7 +204,7 @@ export default function DashboardScreen() {
         const mapped: TransactionItem[] = dbList.map((t) => ({
           id: String(t.id),
           name: t.description || t.category_name || 'Transaksi',
-          customerName: t.customer_name || 'Admin',
+          debtorName: t.customer_name || 'Admin',
           category: t.category_name || 'Umum',
           date: new Date(t.transaction_date).toLocaleDateString('id-ID', {
             day: 'numeric',
@@ -224,7 +240,7 @@ export default function DashboardScreen() {
     setEditingItem({
       id: item.id,
       name: item.name,
-      customerName: item.customerName,
+      debtorName: item.debtorName,
       category: item.category,
       stock: 25,
       quantity: item.quantity,
@@ -256,7 +272,7 @@ export default function DashboardScreen() {
             unit_price: formData.price,
             payment_method: formData.paymentMethod,
             description: formData.name,
-            customer_name: formData.customerName,
+            customer_name: formData.debtorName,
           });
         } catch (e) {
           console.log('DB Update error fallback:', e);
@@ -269,7 +285,7 @@ export default function DashboardScreen() {
             ? {
                 ...t,
                 name: formData.name,
-                customerName: formData.customerName,
+                debtorName: formData.debtorName,
                 category: formData.category,
                 amount: totalAmount,
                 quantity: formData.quantity,
@@ -296,7 +312,7 @@ export default function DashboardScreen() {
             unit_price: formData.price,
             payment_method: formData.paymentMethod,
             description: formData.name,
-            customer_name: formData.customerName,
+            customer_name: formData.debtorName,
           });
         } catch (e) {
           console.log('DB Insert error fallback:', e);
@@ -306,7 +322,7 @@ export default function DashboardScreen() {
       const newTrx: TransactionItem = {
         id: newId,
         name: formData.name,
-        customerName: formData.customerName,
+        debtorName: formData.debtorName,
         category: formData.category,
         date: dateStr,
         amount: totalAmount,
@@ -368,7 +384,7 @@ export default function DashboardScreen() {
   const allDebts = [
     ...transactions.filter((t) => t.paymentMethod === 'Hutang').map((t) => ({
       id: t.id,
-      customerName: t.customerName,
+      debtorName: t.debtorName,
       itemName: t.name,
       amount: t.amount,
       date: t.date,
@@ -376,7 +392,7 @@ export default function DashboardScreen() {
     })),
     ...debtTransactions.map((t) => ({
       id: t.id,
-      customerName: t.customerName,
+      debtorName: t.debtorName,
       itemName: t.name,
       amount: t.total,
       date: t.fullDateText,
@@ -396,7 +412,12 @@ export default function DashboardScreen() {
         <View style={styles.headerContainer}>
           <SafeAreaView style={styles.headerSafeArea}>
             <View style={styles.topBar}>
-              <Text style={styles.greetingText}>Halo, Admin!</Text>
+              <View>
+                <Text style={styles.greetingText}>Halo, Admin!</Text>
+                <Text style={styles.liveClockSubText}>
+                  {dayName}, {dayNumber} {monthYearName} • {timeFormatted}
+                </Text>
+              </View>
 
               <TouchableOpacity
                 style={styles.notificationButton}
@@ -543,7 +564,7 @@ export default function DashboardScreen() {
                         <View style={styles.transactionMeta}>
                           <Text style={styles.transactionName}>{item.name}</Text>
                           <Text style={styles.transactionDate}>
-                            {item.customerName !== 'Admin' ? `${item.customerName} • ` : ''}{item.date}
+                            {item.debtorName !== 'Admin' ? `${item.debtorName} • ` : ''}{item.date}
                           </Text>
                         </View>
                       </View>
@@ -666,7 +687,7 @@ export default function DashboardScreen() {
                         <Ionicons name="person" size={18} color="#D97706" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.debtCustomerName}>{debt.customerName}</Text>
+                        <Text style={styles.debtCustomerName}>{debt.debtorName}</Text>
                         <Text style={styles.debtItemName}>{debt.itemName}</Text>
                         <Text style={styles.debtDate}>{debt.date}</Text>
                       </View>
@@ -679,7 +700,7 @@ export default function DashboardScreen() {
                         onPress={() => {
                           Alert.alert(
                             'Tandai Lunas',
-                            `Tandai hutang "${debt.customerName}" untuk "${debt.itemName}" sebagai lunas?`,
+                            `Tandai hutang "${debt.debtorName}" untuk "${debt.itemName}" sebagai lunas?`,
                             [
                               { text: 'Batal', style: 'cancel' },
                               {
@@ -792,6 +813,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  liveClockSubText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '600',
+    marginTop: 2,
   },
   notificationButton: {
     position: 'relative',

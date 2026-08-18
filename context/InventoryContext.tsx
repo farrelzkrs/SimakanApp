@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface InventoryItem {
   id: string;
@@ -37,6 +38,8 @@ interface InventoryContextType {
   updateSellingPrice: (id: string, sellingPrice: number) => void;
   getProfit: (item: InventoryItem) => number;
 }
+
+const STORAGE_KEY = '@simakan_inventory_items';
 
 const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
@@ -141,6 +144,36 @@ const InventoryContext = createContext<InventoryContextType | undefined>(undefin
 
 export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(DEFAULT_INVENTORY_ITEMS);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // 1. Load persistent inventory on mount
+  useEffect(() => {
+    async function loadStoredInventory() {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setInventoryItems(parsed);
+          }
+        }
+      } catch (err) {
+        console.log('Error loading inventory from storage:', err);
+      } finally {
+        setIsLoaded(true);
+      }
+    }
+    loadStoredInventory();
+  }, []);
+
+  // Helper to save state into AsyncStorage
+  const saveItems = async (items: InventoryItem[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (err) {
+      console.log('Error saving inventory to storage:', err);
+    }
+  };
 
   const addInventoryItem = (itemData: {
     name: string;
@@ -169,12 +202,16 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       progress,
     };
 
-    setInventoryItems((prev) => [newItem, ...prev]);
+    setInventoryItems((prev) => {
+      const updated = [newItem, ...prev];
+      saveItems(updated);
+      return updated;
+    });
   };
 
   const updateInventoryItem = (id: string, updatedData: Partial<InventoryItem>) => {
-    setInventoryItems((prev) =>
-      prev.map((item) => {
+    setInventoryItems((prev) => {
+      const updated = prev.map((item) => {
         if (item.id === id) {
           const newStock = updatedData.stock !== undefined ? updatedData.stock : item.stock;
           const minThreshold = updatedData.minStock || item.minStock || 5;
@@ -191,17 +228,23 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return item;
-      })
-    );
+      });
+      saveItems(updated);
+      return updated;
+    });
   };
 
   const deleteInventoryItem = (id: string) => {
-    setInventoryItems((prev) => prev.filter((item) => item.id !== id));
+    setInventoryItems((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      saveItems(updated);
+      return updated;
+    });
   };
 
   const adjustStockByItemName = (itemName: string, delta: number) => {
-    setInventoryItems((prev) =>
-      prev.map((item) => {
+    setInventoryItems((prev) => {
+      const updated = prev.map((item) => {
         if (item.name.toLowerCase() === itemName.toLowerCase()) {
           const newStock = Math.max(0, item.stock + delta);
           const minThreshold = item.minStock || 5;
@@ -217,8 +260,10 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return item;
-      })
-    );
+      });
+      saveItems(updated);
+      return updated;
+    });
   };
 
   const registerOrRestockExpenseItem = (itemData: {
