@@ -29,7 +29,7 @@ const WATERMARK_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d
 interface TransactionItem {
   id: string;
   name: string;
-  debtorName: string;
+  debtorName?: string;
   category: string;
   date: string;
   amount: number;
