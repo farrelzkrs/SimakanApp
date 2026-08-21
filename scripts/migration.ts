@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_DB_VERSION = 2;
+const CURRENT_DB_VERSION = 4;
 
 export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -13,6 +13,14 @@ export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
 
   if (currentVersion < 2) {
     await migrateV2(db);
+  }
+
+  if (currentVersion < 3) {
+    await migrateV3(db);
+  }
+
+  if (currentVersion < 4) {
+    await migrateV4(db);
   }
 
   await seedDefaultData(db);
@@ -158,6 +166,31 @@ async function migrateV2(db: SQLiteDatabase): Promise<void> {
   if (!hasCustomerName) {
     await db.execAsync(`ALTER TABLE transactions ADD COLUMN customer_name VARCHAR(100)`);
   }
+
+  await db.execAsync(`PRAGMA user_version = ${CURRENT_DB_VERSION}`);
+}
+
+async function migrateV3(db: SQLiteDatabase): Promise<void> {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS customers (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      name            VARCHAR(100) NOT NULL UNIQUE,
+      created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
+  `);
+  await db.execAsync(`PRAGMA user_version = 3`);
+}
+
+async function migrateV4(db: SQLiteDatabase): Promise<void> {
+  // Migrate existing customer names from transactions to customers table (graceful sync)
+  await db.execAsync(`
+    INSERT OR IGNORE INTO customers (name)
+    SELECT DISTINCT customer_name 
+    FROM transactions 
+    WHERE customer_name IS NOT NULL AND customer_name != '' AND customer_name != 'Admin';
+  `);
 
   await db.execAsync(`PRAGMA user_version = ${CURRENT_DB_VERSION}`);
 }

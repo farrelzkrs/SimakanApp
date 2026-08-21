@@ -4,18 +4,21 @@ import { CashRepository } from '../repositories/CashRepository';
 import { ItemRepository } from '../repositories/ItemRepository';
 import { StockMovementRepository } from '../repositories/StockMovementRepository';
 import { TransactionRepository } from '../repositories/TransactionRepository';
+import { CustomerRepository } from '../repositories/CustomerRepository';
 
 export class TransactionService {
   private transactionRepo: TransactionRepository;
   private cashRepo: CashRepository;
   private itemRepo: ItemRepository;
   private stockMovementRepo: StockMovementRepository;
+  private customerRepo: CustomerRepository;
 
   constructor(private db: SQLiteDatabase) {
     this.transactionRepo = new TransactionRepository(db);
     this.cashRepo = new CashRepository(db);
     this.itemRepo = new ItemRepository(db);
     this.stockMovementRepo = new StockMovementRepository(db);
+    this.customerRepo = new CustomerRepository(db);
   }
 
   async createTransaction(input: CreateTransactionInput): Promise<number> {
@@ -62,6 +65,10 @@ export class TransactionService {
           stockAfter,
           description: `Transaksi ${input.transaction_type === 'IN' ? 'masuk' : 'keluar'}`,
         });
+      }
+
+      if (input.customer_name) {
+        await this.customerRepo.addCustomer(input.customer_name);
       }
     });
 

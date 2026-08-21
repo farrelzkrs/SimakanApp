@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,15 +18,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
-import { useDatabase } from '@/hooks/use-database';
-import { TransactionService } from '@/services/TransactionService';
-import { useTransactions } from '@/context/TransactionContext';
+import { useTransactions, TransactionItem as ContextTransactionItem } from '@/context/TransactionContext';
+import { useInventory } from '@/context/InventoryContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const WATERMARK_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgMTQwIiBmaWxsPSJub25lIj48cGF0aCBkPSJNMjUgMzUgQyAyNSAxMCwgMTM1IDEwLCAxMzUgMzUgTCAxMzUgMTQwIEwgMjUgMTQwIFoiIGZpbGw9IiNFRUY0RkUiLz48cmVjdCB4PSIzMyIgeT0iNTAiIHdpZHRoPSI5NCIgaGVpZ2h0PSI4MCIgcng9IjgiIGZpbGw9IiNGRkZGRkYiLz48Y2lyY2xlIGN4PSI1OCIgY3k9IjkwIiByPSI4IiBmaWxsPSIjRUVGNEZFIi8+PGNpcmNsZSBjeD0iOTgiIGN5PSI5MCIgcj0iOCIgZmlsbD0iI0VFRjRGRSIvPjwvc3ZnPg==`;
 
-interface TransactionItem {
+interface DashboardTransactionItem {
   id: string;
   name: string;
   debtorName?: string;
@@ -43,115 +42,38 @@ interface TransactionItem {
   timestamp: number;
 }
 
-const INITIAL_TRANSACTIONS: TransactionItem[] = [
-  {
-    id: 'trx-1',
-    name: 'Maju Jaya Coffee',
-    debtorName: 'Admin',
-    category: 'Penjualan',
-    date: '4 Oktober 2020',
-    amount: 2000,
-    type: 'IN',
-    quantity: 1,
-    unit: 'Cup',
-    paymentMethod: 'Lunas',
-    icon: 'cafe-outline',
-    bgColor: '#FFEDD5',
-    iconColor: '#EA580C',
-    timestamp: new Date('2020-10-04T00:00:00').getTime(),
-  },
-  {
-    id: 'trx-2',
-    name: 'Zeus Motorworks',
-    debtorName: 'Admin',
-    category: 'Penjualan',
-    date: '4 Oktober 2020',
-    amount: 4000,
-    type: 'IN',
-    quantity: 1,
-    unit: 'Jasa',
-    paymentMethod: 'Lunas',
-    icon: 'settings-outline',
-    bgColor: '#E2E8F0',
-    iconColor: '#475569',
-    timestamp: new Date('2020-10-04T01:00:00').getTime(),
-  },
-  {
-    id: 'trx-3',
-    name: 'Desain Freelance',
-    debtorName: 'Admin',
-    category: 'Penjualan',
-    date: '4 Oktober 2020',
-    amount: 1000,
-    type: 'IN',
-    quantity: 1,
-    unit: 'Proyek',
-    paymentMethod: 'Lunas',
-    icon: 'color-palette-outline',
-    bgColor: '#FEF08A',
-    iconColor: '#CA8A04',
-    timestamp: new Date('2020-10-04T02:00:00').getTime(),
-  },
-  {
-    id: 'trx-4',
-    name: 'Uang Kos',
-    debtorName: 'Pak Budi',
-    category: 'Uang Kos',
-    date: '4 Oktober 2020',
-    amount: 200,
-    type: 'OUT',
-    quantity: 1,
-    unit: 'Bulan',
-    paymentMethod: 'Lunas',
-    icon: 'home-outline',
-    bgColor: '#DBEAFE',
-    iconColor: '#2563EB',
-    timestamp: new Date('2020-10-04T03:00:00').getTime(),
-  },
-  {
-    id: 'trx-5',
-    name: 'Netflix',
-    debtorName: 'Admin',
-    category: 'Operasional',
-    date: '4 Oktober 2020',
-    amount: 12,
-    type: 'OUT',
-    quantity: 1,
-    unit: 'Bln',
-    paymentMethod: 'Lunas',
-    icon: 'tv-outline',
-    bgColor: '#FEE2E2',
-    iconColor: '#DC2626',
-    timestamp: new Date('2020-10-04T04:00:00').getTime(),
-  },
-  {
-    id: 'trx-6',
-    name: 'Konsumsi',
-    debtorName: 'Admin',
-    category: 'Konsumsi',
-    date: '4 Oktober 2020',
-    amount: 250,
-    type: 'OUT',
-    quantity: 2,
-    unit: 'Porsi',
-    paymentMethod: 'Lunas',
-    icon: 'restaurant-outline',
-    bgColor: '#FEF3C7',
-    iconColor: '#D97706',
-    timestamp: new Date('2020-10-04T05:00:00').getTime(),
-  },
-];
+const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+function mapContextToDashboard(t: ContextTransactionItem): DashboardTransactionItem {
+  return {
+    id: t.id,
+    name: t.name,
+    debtorName: t.debtorName,
+    category: t.category,
+    date: t.fullDateText,
+    amount: t.total,
+    type: t.transactionType,
+    quantity: t.quantity,
+    unit: t.unit,
+    paymentMethod: t.paymentMethod,
+    icon: t.transactionType === 'IN' ? 'cart-outline' : 'receipt-outline',
+    bgColor: t.transactionType === 'IN' ? '#DCFCE7' : '#FEE2E2',
+    iconColor: t.transactionType === 'IN' ? '#16A34A' : '#DC2626',
+    timestamp: t.timestamp,
+  };
+}
 
 export default function DashboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { db } = useDatabase();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
-  
-  const { addTransaction, getDebtTransactions, markDebtAsPaid } = useTransactions();
+
+  const { transactions: contextTransactions, addTransaction, updateTransaction, markDebtAsPaid, deleteTransaction: contextDeleteTransaction } = useTransactions();
+  const { adjustStockByItemName, registerOrRestockExpenseItem } = useInventory();
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
-  const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
+
+  const transactions = useMemo(() => contextTransactions.map(mapContextToDashboard), [contextTransactions]);
 
   // Live Real-Time Device Clock & Date
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -165,7 +87,6 @@ export default function DashboardScreen() {
   }, []);
 
   const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-  const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
   const dayNumber = currentDate.getDate();
   const dayName = DAYS[currentDate.getDay()];
@@ -191,7 +112,7 @@ export default function DashboardScreen() {
     .filter((t) => t.type === 'OUT')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const totalSaldo = 90000 + (totalIncome - totalExpense);
+  const totalSaldo = totalIncome - totalExpense;
 
   const allFilteredTransactions = transactions
     .filter((t) => (isIncome ? t.type === 'IN' : t.type === 'OUT'))
@@ -199,8 +120,7 @@ export default function DashboardScreen() {
 
   const filteredTransactions = allFilteredTransactions.slice(0, 10);
 
-  const debtTransactions = getDebtTransactions();
-  const debtCount = debtTransactions.length + transactions.filter((t) => t.paymentMethod === 'Hutang').length;
+  const debtCount = transactions.filter((t) => t.paymentMethod === 'Hutang').length;
 
   const formatNumber = (num: number) => {
     return num.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -210,48 +130,14 @@ export default function DashboardScreen() {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
 
-  const loadDatabaseData = useCallback(async () => {
-    if (!db) return;
-    try {
-      const service = new TransactionService(db);
-      const dbList = await service.getTransactions(20);
-      if (dbList && dbList.length > 0) {
-        const mapped: TransactionItem[] = dbList.map((t) => ({
-          id: String(t.id),
-          name: t.description || t.category_name || 'Transaksi',
-          debtorName: t.customer_name || 'Admin',
-          category: t.category_name || 'Umum',
-          date: (() => {
-            const d = new Date(t.transaction_date);
-            return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-          })(),
-          amount: t.nominal,
-          type: t.transaction_type,
-          quantity: t.quantity || 1,
-          unit: 'Pcs',
-          paymentMethod: (t.payment_method === 'Hutang' ? 'Hutang' : 'Lunas') as 'Lunas' | 'Hutang',
-          icon: t.transaction_type === 'IN' ? 'cart-outline' : 'receipt-outline',
-          bgColor: t.transaction_type === 'IN' ? '#DCFCE7' : '#FEE2E2',
-          iconColor: t.transaction_type === 'IN' ? '#16A34A' : '#DC2626',
-          timestamp: new Date(t.transaction_date).getTime(),
-        }));
-        setTransactions(mapped);
-      }
-    } catch (e) {
-      console.log('Using in-memory transactions fallback:', e);
-    }
-  }, [db]);
 
-  useEffect(() => {
-    loadDatabaseData();
-  }, [loadDatabaseData]);
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
     setIsModalOpen(true);
   };
 
-  const handleEditItem = (item: TransactionItem) => {
+  const handleEditItem = (item: DashboardTransactionItem) => {
     setEditingItem({
       id: item.id,
       name: item.name,
@@ -268,149 +154,51 @@ export default function DashboardScreen() {
   };
 
   const handleSaveOrder = async (formData: OrderFormData) => {
-    const totalAmount = formData.price * formData.quantity;
-    const now = new Date();
-    const dateStr = `${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
-
     if (formData.id) {
-      if (db) {
-        try {
-          const service = new TransactionService(db);
-          await service.updateTransaction(formData.id, {
-            transaction_type: formData.transactionType,
-            nominal: totalAmount,
-            quantity: formData.quantity,
-            unit_price: formData.price,
-            payment_method: formData.paymentMethod,
-            description: formData.name,
-            customer_name: formData.debtorName,
-          });
-        } catch (e) {
-          console.log('DB Update error fallback:', e);
-        }
-      }
-
-      setTransactions((prev) =>
-        prev.map((t) =>
-          t.id === formData.id
-            ? {
-                ...t,
-                name: formData.name,
-                debtorName: formData.debtorName,
-                category: formData.category,
-                amount: totalAmount,
-                quantity: formData.quantity,
-                unit: formData.unit,
-                paymentMethod: formData.paymentMethod,
-                type: formData.transactionType,
-              }
-            : t
-        )
-      );
-
+      await updateTransaction(formData.id, formData);
       Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil diperbarui!`);
     } else {
-      const newId = `trx-${Date.now()}`;
-      if (db) {
-        try {
-          const service = new TransactionService(db);
-          await service.createTransaction({
-            transaction_date: now.toISOString().replace('T', ' ').substring(0, 19),
-            transaction_type: formData.transactionType,
-            category_id: formData.transactionType === 'IN' ? 1 : 4,
-            nominal: totalAmount,
-            quantity: formData.quantity,
-            unit_price: formData.price,
-            payment_method: formData.paymentMethod,
-            description: formData.name,
-            customer_name: formData.debtorName,
-          });
-        } catch (e) {
-          console.log('DB Insert error fallback:', e);
-        }
+      await addTransaction(formData);
+      
+      // Update inventory stock
+      if (formData.transactionType === 'IN') {
+        await adjustStockByItemName(formData.name, -formData.quantity);
+      } else {
+        await registerOrRestockExpenseItem({
+          name: formData.name,
+          category: formData.category,
+          quantity: formData.quantity,
+          unit: formData.unit,
+          price: formData.price,
+        });
       }
 
-      const newTrx: TransactionItem = {
-        id: newId,
-        name: formData.name,
-        debtorName: formData.debtorName,
-        category: formData.category,
-        date: dateStr,
-        amount: totalAmount,
-        type: formData.transactionType,
-        quantity: formData.quantity,
-        unit: formData.unit,
-        paymentMethod: formData.paymentMethod,
-        icon: formData.transactionType === 'IN' ? 'cafe-outline' : 'restaurant-outline',
-        bgColor: formData.transactionType === 'IN' ? '#FFEDD5' : '#FEF3C7',
-        iconColor: formData.transactionType === 'IN' ? '#EA580C' : '#D97706',
-        timestamp: now.getTime(),
-      };
-
-      addTransaction(formData, 'day-sat');
-
-      setTransactions((prev) => [newTrx, ...prev]);
-      Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil dicatat dan masuk ke Rekap!`);
+      Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil dicatat!`);
     }
 
     setIsModalOpen(false);
   };
 
   const handleDeleteOrder = async (id: string) => {
-    if (db) {
-      try {
-        const service = new TransactionService(db);
-        await service.deleteTransaction(id);
-      } catch (e) {
-        console.log('DB Delete error fallback:', e);
-      }
-    }
-
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    await contextDeleteTransaction(id);
     setIsModalOpen(false);
     Alert.alert('Terhapus', 'Pesanan telah berhasil dihapus.');
   };
 
-  const handleMarkLocalDebtPaid = (id: string) => {
-    setTransactions((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, paymentMethod: 'Lunas' as const } : t
-      )
-    );
-    markDebtAsPaid(id);
-
-    if (db) {
-      (async () => {
-        try {
-          const service = new TransactionService(db);
-          await service.markDebtPaid(id);
-        } catch (e) {
-          console.log('DB markDebtPaid fallback:', e);
-        }
-      })();
-    }
-
+  const handleMarkLocalDebtPaid = async (id: string) => {
+    await markDebtAsPaid(id);
     Alert.alert('Lunas!', 'Hutang telah ditandai lunas.');
   };
 
-  const allDebts = [
-    ...transactions.filter((t) => t.paymentMethod === 'Hutang').map((t) => ({
+  const allDebts = transactions
+    .filter((t) => t.paymentMethod === 'Hutang')
+    .map((t) => ({
       id: t.id,
       debtorName: t.debtorName,
       itemName: t.name,
       amount: t.amount,
       date: t.date,
-      source: 'local' as const,
-    })),
-    ...debtTransactions.map((t) => ({
-      id: t.id,
-      debtorName: t.debtorName,
-      itemName: t.name,
-      amount: t.total,
-      date: t.fullDateText,
-      source: 'context' as const,
-    })),
-  ];
+    }));
 
   return (
     <View style={styles.container}>
@@ -549,7 +337,7 @@ export default function DashboardScreen() {
                 </View>
               ) : (
                 filteredTransactions.map((item, index) => (
-                  <React.Fragment key={item.id}>
+                  <React.Fragment key={item.id ? String(item.id) : `fallback-${index}`}>
                     <TouchableOpacity
                       activeOpacity={0.7}
                       style={styles.transactionItem}
@@ -576,7 +364,7 @@ export default function DashboardScreen() {
                         <View style={styles.transactionMeta}>
                           <Text style={styles.transactionName}>{item.name}</Text>
                           <Text style={styles.transactionDate}>
-                            {item.debtorName !== 'Admin' ? `${item.debtorName} • ` : ''}{item.date}
+                            {item.debtorName && item.debtorName !== 'Admin' ? `${item.debtorName} • ` : ''}{item.date}
                           </Text>
                         </View>
                       </View>
@@ -708,7 +496,7 @@ export default function DashboardScreen() {
                 </View>
               ) : (
                 allDebts.map((debt, idx) => (
-                  <View key={`${debt.source}-${debt.id}-${idx}`} style={styles.debtItemCard}>
+                  <View key={`${debt.id || 'unknown'}-${idx}`} style={styles.debtItemCard}>
                     <View style={styles.debtItemLeft}>
                       <View style={styles.debtAvatarCircle}>
                         <Ionicons name="person" size={18} color="#D97706" />
@@ -784,7 +572,7 @@ export default function DashboardScreen() {
           }}
         >
           <Ionicons
-            name={activeNav === 'chart' ? 'stats-chart' : 'stats-chart-outline'}
+            name={activeNav === 'chart' ? 'book' : 'book-outline'}
             size={24}
             color={activeNav === 'chart' ? '#14A39F' : '#94A3B8'}
           />
@@ -799,7 +587,7 @@ export default function DashboardScreen() {
           }}
         >
           <Ionicons
-            name={activeNav === 'wallet' ? 'card' : 'card-outline'}
+            name={activeNav === 'wallet' ? 'cube' : 'cube-outline'}
             size={26}
             color={activeNav === 'wallet' ? '#14A39F' : '#94A3B8'}
           />

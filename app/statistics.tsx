@@ -405,7 +405,6 @@ export default function StatisticsScreen() {
           <Text style={styles.listHeaderTitle}>
             Daftar Orang Berhutang ({filteredDebtorGroups.length})
           </Text>
-          <Text style={styles.listHeaderSub}>Tekan kartu untuk melihat rincian transaksi</Text>
         </View>
 
         {/* Grouped Debtor Accordion Cards List */}
@@ -659,7 +658,7 @@ export default function StatisticsScreen() {
           style={styles.navItem}
           onPress={() => setActiveNav('debt')}
         >
-          <Ionicons name="receipt" size={26} color="#14A39F" />
+          <Ionicons name="book" size={24} color="#14A39F" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -670,7 +669,7 @@ export default function StatisticsScreen() {
             router.replace('/inventory');
           }}
         >
-          <Ionicons name="card-outline" size={26} color="#94A3B8" />
+          <Ionicons name="cube-outline" size={26} color="#94A3B8" />
         </TouchableOpacity>
       </View>
     </View>

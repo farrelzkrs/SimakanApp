@@ -46,6 +46,7 @@ export default function InventoryScreen() {
   const [category, setCategory] = useState('Makanan');
   const [stock, setStock] = useState(1);
   const [unit, setUnit] = useState('Pcs');
+  const [sellingUnit, setSellingUnit] = useState('Pcs');
   const [priceInput, setPriceInput] = useState('');
   const [sellingPriceInput, setSellingPriceInput] = useState('');
   const [pcsPerDus, setPcsPerDus] = useState('');
@@ -73,6 +74,7 @@ export default function InventoryScreen() {
     setCategory('Makanan');
     setStock(1);
     setUnit('Pcs');
+    setSellingUnit('Pcs');
     setPriceInput('');
     setSellingPriceInput('');
     setPcsPerDus('');
@@ -85,6 +87,7 @@ export default function InventoryScreen() {
     setCategory(item.category);
     setStock(item.stock);
     setUnit(item.unit === 'Dus' ? 'Dus' : 'Pcs');
+    setSellingUnit('Pcs');
     setPriceInput(item.price ? parseInt(String(item.price), 10).toLocaleString('id-ID') : '');
     setSellingPriceInput(item.sellingPrice ? parseInt(String(item.sellingPrice), 10).toLocaleString('id-ID') : '');
     setPcsPerDus('');
@@ -259,8 +262,8 @@ export default function InventoryScreen() {
 
         {/* Inventory Item Cards */}
         {filteredItems.length > 0 ? (
-          filteredItems.map((item) => (
-            <View key={item.id} style={styles.itemCard}>
+          filteredItems.map((item, index) => (
+            <View key={item.id ? String(item.id) : `fallback-${index}`} style={styles.itemCard}>
               <View style={styles.itemHeader}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.itemTitleRow}>
@@ -450,10 +453,10 @@ export default function InventoryScreen() {
                       </ScrollView>
                     </View>
 
-                    {/* Form Field 3: Harga Satuan Per Picis (Rp) */}
+                    {/* Form Field 3: Harga Satuan (Beli) */}
                     <View style={styles.fieldContainer}>
                       <Text style={styles.fieldLabel}>
-                        Harga per Picis<Text style={styles.requiredStar}>*</Text>
+                        {unit === 'Dus' ? 'Harga Beli per Dus' : 'Harga Beli per Picis'}<Text style={styles.requiredStar}>*</Text>
                       </Text>
                       <View style={styles.inputPrefixBox}>
                         <Text style={styles.inputPrefixText}>Rp</Text>
@@ -469,19 +472,49 @@ export default function InventoryScreen() {
                               setPriceInput('');
                               return;
                             }
-                            setPriceInput(parseInt(numeric, 10).toLocaleString('id-ID'));
+                            setPriceInput(parseInt(numeric, 10).toLocaleString('en-US'));
                           }}
                         />
                       </View>
+                      {unit === 'Dus' && pcsPerDus && priceInput ? (
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+                          * Harga beli per picis: <Text style={{ fontWeight: '600' }}>Rp {Math.round((parseInt(priceInput.replace(/[^0-9]/g, ''), 10) || 0) / (parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1)).toLocaleString('en-US')}</Text>
+                        </Text>
+                      ) : null}
                     </View>
 
                     {/* Form Field 3.5: Harga Jual */}
                     <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Harga Jual</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>
+                          Harga Jual per {sellingUnit}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          <TouchableOpacity
+                            onPress={() => setSellingUnit('Pcs')}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#F1F5F9' },
+                              sellingUnit === 'Pcs' && { backgroundColor: '#0F172A' }
+                            ]}
+                          >
+                            <Text style={[{ fontSize: 12, fontWeight: '600', color: '#64748B' }, sellingUnit === 'Pcs' && { color: '#FFFFFF' }]}>Pcs</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => setSellingUnit('Dus')}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#F1F5F9' },
+                              sellingUnit === 'Dus' && { backgroundColor: '#0F172A' }
+                            ]}
+                          >
+                            <Text style={[{ fontSize: 12, fontWeight: '600', color: '#64748B' }, sellingUnit === 'Dus' && { color: '#FFFFFF' }]}>Dus</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      
                       <View style={styles.inputPrefixBox}>
                         <Text style={styles.inputPrefixText}>Rp</Text>
                         <TextInput
-                          style={styles.prefixedInput}
+                          style={[styles.prefixedInput, { flex: 1 }]}
                           placeholder="Contoh: 30.000"
                           placeholderTextColor="#94A3B8"
                           keyboardType="numeric"
@@ -492,10 +525,40 @@ export default function InventoryScreen() {
                               setSellingPriceInput('');
                               return;
                             }
-                            setSellingPriceInput(parseInt(numeric, 10).toLocaleString('id-ID'));
+                            setSellingPriceInput(parseInt(numeric, 10).toLocaleString('en-US'));
                           }}
                         />
+                        {sellingPriceInput ? (() => {
+                          const buyPriceNum = parseFloat(priceInput.replace(/[^0-9]/g, '')) || 0;
+                          const sellPriceNum = parseFloat(sellingPriceInput.replace(/[^0-9]/g, '')) || 0;
+                          const multiplier = parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1;
+                          
+                          let costPerPcs = unit === 'Dus' ? buyPriceNum / multiplier : buyPriceNum;
+                          let revenuePerPcs = sellingUnit === 'Dus' ? sellPriceNum / multiplier : sellPriceNum;
+                          
+                          let profit = revenuePerPcs - costPerPcs;
+                          let profitDisplay = sellingUnit === 'Dus' ? profit * multiplier : profit;
+                          profitDisplay = Math.round(profitDisplay);
+                          const isProfit = profitDisplay >= 0;
+
+                          return (
+                            <Text style={{ 
+                              fontSize: 14, 
+                              fontWeight: '700', 
+                              color: isProfit ? '#16A34A' : '#DC2626',
+                              marginLeft: 8,
+                              marginRight: 12
+                            }}>
+                              {isProfit ? '+' : '-'}{Math.abs(profitDisplay).toLocaleString('id-ID')}
+                            </Text>
+                          );
+                        })() : null}
                       </View>
+                      {sellingUnit === 'Dus' && pcsPerDus && sellingPriceInput ? (
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+                          * Harga jual per picis: <Text style={{ fontWeight: '600' }}>Rp {Math.round((parseInt(sellingPriceInput.replace(/[^0-9]/g, ''), 10) || 0) / (parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1)).toLocaleString('en-US')}</Text>
+                        </Text>
+                      ) : null}
                     </View>
 
                     {/* Form Field 4: Stok Awal & Satuan Row */}
@@ -621,11 +684,11 @@ export default function InventoryScreen() {
           style={styles.navItem}
           onPress={() => router.replace('/statistics')}
         >
-          <Ionicons name="receipt-outline" size={24} color="#94A3B8" />
+          <Ionicons name="book-outline" size={24} color="#94A3B8" />
         </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7} style={styles.navItem}>
-          <Ionicons name="card" size={26} color="#14A39F" />
+          <Ionicons name="cube" size={26} color="#14A39F" />
         </TouchableOpacity>
       </View>
     </View>

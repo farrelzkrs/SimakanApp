@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { OrderFormData } from '@/components/OrderModal';
-
-const STORAGE_KEY = '@simakan_transactions_v2';
+import { TransactionService } from '@/services/TransactionService';
+import { CustomerRepository, Customer } from '@/repositories/CustomerRepository';
+import { toSQLiteDateTime, fromSQLiteDateTime } from '@/utils/dateUtils';
 
 export interface TransactionItem {
   id: string;
@@ -16,10 +17,10 @@ export interface TransactionItem {
   transactionType: 'IN' | 'OUT';
   debtorName?: string;
   debtStatus?: 'Belum Lunas' | 'Lunas';
-  monthKey: string; // e.g. "2026-08"
-  weekKey: string;  // e.g. "W1", "W2", "W3", "W4", "W5"
-  dateKey: string;  // e.g. "2026-08-15"
-  dayId: string;    // e.g. "day-sat", "day-wed"
+  monthKey: string;
+  weekKey: string;
+  dateKey: string;
+  dayId: string;
   fullDateText: string;
   timeText: string;
   timestamp: number;
@@ -27,6 +28,7 @@ export interface TransactionItem {
 
 interface TransactionContextType {
   transactions: TransactionItem[];
+  customers: Customer[];
   addTransaction: (data: OrderFormData, targetDayId?: string, customDate?: Date) => void;
   updateTransaction: (id: string, data: Partial<OrderFormData>) => void;
   deleteTransaction: (id: string) => void;
@@ -38,495 +40,163 @@ interface TransactionContextType {
   markDebtAsPaid: (id: string) => void;
 }
 
-const INITIAL_TRANSACTIONS: TransactionItem[] = [
-  // --- AGUSTUS 2026: MINGGU KE-3 (15 - 21 Ags) ---
-  // Sabtu, 15 Agustus 2026 (Pemasukan)
-  {
-    id: 'trx-inc-1',
-    name: 'Kopi Susu Aren Special',
-    category: 'Minuman',
-    quantity: 15,
-    unit: 'Cup',
-    price: 22000,
-    total: 330000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W3',
-    dateKey: '2026-08-15',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 15 Agustus 2026',
-    timeText: '14:20 WIB',
-    timestamp: new Date('2026-08-15T14:20:00').getTime(),
-  },
-  {
-    id: 'trx-inc-2',
-    name: 'Roti Bakar Keju Cokelat',
-    category: 'Makanan',
-    quantity: 8,
-    unit: 'Porsi',
-    price: 25000,
-    total: 200000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W3',
-    dateKey: '2026-08-15',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 15 Agustus 2026',
-    timeText: '15:10 WIB',
-    timestamp: new Date('2026-08-15T15:10:00').getTime(),
-  },
-  {
-    id: 'trx-inc-hutang-1',
-    name: 'Kopi Susu Aren Special',
-    category: 'Minuman',
-    quantity: 3,
-    unit: 'Cup',
-    price: 22000,
-    total: 66000,
-    paymentMethod: 'Hutang',
-    transactionType: 'IN',
-    debtorName: 'Pak Budi (Guru SMA)',
-    debtStatus: 'Belum Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W3',
-    dateKey: '2026-08-15',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 15 Agustus 2026',
-    timeText: '15:30 WIB',
-    timestamp: new Date('2026-08-15T15:30:00').getTime(),
-  },
-  {
-    id: 'trx-inc-hutang-1b',
-    name: 'Roti Bakar Keju Cokelat',
-    category: 'Makanan',
-    quantity: 2,
-    unit: 'Porsi',
-    price: 25000,
-    total: 50000,
-    paymentMethod: 'Hutang',
-    transactionType: 'IN',
-    debtorName: 'Pak Budi (Guru SMA)',
-    debtStatus: 'Belum Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W3',
-    dateKey: '2026-08-15',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 15 Agustus 2026',
-    timeText: '15:40 WIB',
-    timestamp: new Date('2026-08-15T15:40:00').getTime(),
-  },
-  {
-    id: 'trx-inc-7',
-    name: 'Croissant Butter Warm',
-    category: 'Snack',
-    quantity: 12,
-    unit: 'Pcs',
-    price: 18000,
-    total: 216000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W3',
-    dateKey: '2026-08-15',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 15 Agustus 2026',
-    timeText: '16:45 WIB',
-    timestamp: new Date('2026-08-15T16:45:00').getTime(),
-  },
-  // Sabtu, 15 Agustus 2026 (Pengeluaran)
-  {
-    id: 'trx-exp-1',
-    name: 'Biji Kopi Arabika Gayo 1kg',
-    category: 'Bahan Baku',
-    quantity: 2,
-    unit: 'Kg',
-    price: 125000,
-    total: 250000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W3',
-    dateKey: '2026-08-15',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 15 Agustus 2026',
-    timeText: '09:30 WIB',
-    timestamp: new Date('2026-08-15T09:30:00').getTime(),
-  },
-  {
-    id: 'trx-exp-2',
-    name: 'Susu UHT Full Cream 1L',
-    category: 'Bahan Baku',
-    quantity: 10,
-    unit: 'Karton',
-    price: 18000,
-    total: 180000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W3',
-    dateKey: '2026-08-15',
-    dayId: 'day-sat',
-    fullDateText: 'Sabtu, 15 Agustus 2026',
-    timeText: '10:00 WIB',
-    timestamp: new Date('2026-08-15T10:00:00').getTime(),
-  },
-
-  // Jumat, 14 Agustus 2026
-  {
-    id: 'trx-inc-8',
-    name: 'Matcha Latte Ice',
-    category: 'Minuman',
-    quantity: 14,
-    unit: 'Cup',
-    price: 24000,
-    total: 336000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-14',
-    dayId: 'day-fri',
-    fullDateText: 'Jumat, 14 Agustus 2026',
-    timeText: '13:15 WIB',
-    timestamp: new Date('2026-08-14T13:15:00').getTime(),
-  },
-  {
-    id: 'trx-inc-hutang-2',
-    name: 'Nasi Goreng Spesial Telur',
-    category: 'Makanan',
-    quantity: 2,
-    unit: 'Porsi',
-    price: 28000,
-    total: 56000,
-    paymentMethod: 'Hutang',
-    transactionType: 'IN',
-    debtorName: 'Mas Fajar (Santri)',
-    debtStatus: 'Belum Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-14',
-    dayId: 'day-fri',
-    fullDateText: 'Jumat, 14 Agustus 2026',
-    timeText: '12:00 WIB',
-    timestamp: new Date('2026-08-14T12:00:00').getTime(),
-  },
-  {
-    id: 'trx-exp-4',
-    name: 'Sirup Karamel 750ml',
-    category: 'Bahan Baku',
-    quantity: 3,
-    unit: 'Botol',
-    price: 65000,
-    total: 195000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-14',
-    dayId: 'day-fri',
-    fullDateText: 'Jumat, 14 Agustus 2026',
-    timeText: '11:20 WIB',
-    timestamp: new Date('2026-08-14T11:20:00').getTime(),
-  },
-
-  // Rabu, 12 Agustus 2026
-  {
-    id: 'trx-inc-3',
-    name: 'Espresso Double Shot',
-    category: 'Minuman',
-    quantity: 10,
-    unit: 'Cup',
-    price: 18000,
-    total: 180000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-12',
-    dayId: 'day-wed',
-    fullDateText: 'Rabu, 12 Agustus 2026',
-    timeText: '11:00 WIB',
-    timestamp: new Date('2026-08-12T11:00:00').getTime(),
-  },
-  {
-    id: 'trx-inc-4',
-    name: 'Nasi Goreng Spesial Telur',
-    category: 'Makanan',
-    quantity: 6,
-    unit: 'Porsi',
-    price: 28000,
-    total: 168000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-12',
-    dayId: 'day-wed',
-    fullDateText: 'Rabu, 12 Agustus 2026',
-    timeText: '12:30 WIB',
-    timestamp: new Date('2026-08-12T12:30:00').getTime(),
-  },
-  {
-    id: 'trx-exp-3',
-    name: 'Cup Plastik Sablon 16oz',
-    category: 'Kemasan',
-    quantity: 5,
-    unit: 'Pack',
-    price: 35000,
-    total: 175000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-12',
-    dayId: 'day-wed',
-    fullDateText: 'Rabu, 12 Agustus 2026',
-    timeText: '13:45 WIB',
-    timestamp: new Date('2026-08-12T13:45:00').getTime(),
-  },
-
-  // Senin, 10 Agustus 2026
-  {
-    id: 'trx-inc-5',
-    name: 'Caramel Macchiato Large',
-    category: 'Minuman',
-    quantity: 8,
-    unit: 'Cup',
-    price: 26000,
-    total: 208000,
-    paymentMethod: 'Lunas',
-    transactionType: 'IN',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-10',
-    dayId: 'day-mon',
-    fullDateText: 'Senin, 10 Agustus 2026',
-    timeText: '10:15 WIB',
-    timestamp: new Date('2026-08-10T10:15:00').getTime(),
-  },
-  {
-    id: 'trx-inc-hutang-3',
-    name: 'Roti Bakar Keju Cokelat',
-    category: 'Makanan',
-    quantity: 4,
-    unit: 'Porsi',
-    price: 25000,
-    total: 100000,
-    paymentMethod: 'Hutang',
-    transactionType: 'IN',
-    debtorName: 'Bu Ani (Staf Yayasan)',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-10',
-    dayId: 'day-mon',
-    fullDateText: 'Senin, 10 Agustus 2026',
-    timeText: '11:00 WIB',
-    timestamp: new Date('2026-08-10T11:00:00').getTime(),
-  },
-  {
-    id: 'trx-exp-5',
-    name: 'Gas Elpiji 12kg',
-    category: 'Operasional',
-    quantity: 1,
-    unit: 'Tabung',
-    price: 215000,
-    total: 215000,
-    paymentMethod: 'Lunas',
-    transactionType: 'OUT',
-    debtStatus: 'Lunas',
-    monthKey: '2026-08',
-    weekKey: 'W2',
-    dateKey: '2026-08-10',
-    dayId: 'day-mon',
-    fullDateText: 'Senin, 10 Agustus 2026',
-    timeText: '09:00 WIB',
-    timestamp: new Date('2026-08-10T09:00:00').getTime(),
-  },
-];
-
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
 
-export function TransactionProvider({ children }: { children: React.ReactNode }) {
-  const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
+const DAYS_MAP = ['day-sun', 'day-mon', 'day-tue', 'day-wed', 'day-thu', 'day-fri', 'day-sat'];
+const DAYS_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const MONTHS_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-  // Load persistent transactions on mount
-  useEffect(() => {
-    async function loadStoredTransactions() {
-      try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setTransactions(parsed);
-          }
-        }
-      } catch (err) {
-        console.log('Error loading transactions from storage:', err);
-      }
-    }
-    loadStoredTransactions();
-  }, []);
+function mapDbToTransactionItem(t: any): TransactionItem {
+  const d = fromSQLiteDateTime(t.transaction_date);
+  const qty = t.quantity || 1;
+  const unitPrice = t.unit_price || 0;
+  const nominal = t.nominal || 0;
 
-  const saveTransactions = async (items: TransactionItem[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (err) {
-      console.log('Error saving transactions to storage:', err);
-    }
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+
+  const dateNum = d.getDate();
+  let weekKey = 'W1';
+  if (dateNum > 28) weekKey = 'W5';
+  else if (dateNum > 21) weekKey = 'W4';
+  else if (dateNum > 14) weekKey = 'W3';
+  else if (dateNum > 7) weekKey = 'W2';
+
+  return {
+    id: String(t.id),
+    name: t.description || t.category_name || 'Transaksi',
+    category: t.category_name || 'Umum',
+    quantity: qty,
+    unit: 'Pcs',
+    price: unitPrice,
+    total: nominal,
+    paymentMethod: t.payment_method === 'Hutang' ? 'Hutang' : 'Lunas',
+    transactionType: t.transaction_type as 'IN' | 'OUT',
+    debtorName: t.customer_name || undefined,
+    debtStatus: t.payment_method === 'Hutang' ? 'Belum Lunas' : 'Lunas',
+    monthKey: `${yyyy}-${mm}`,
+    weekKey,
+    dateKey: `${yyyy}-${mm}-${dd}`,
+    dayId: DAYS_MAP[d.getDay()],
+    fullDateText: `${DAYS_NAMES[d.getDay()]}, ${d.getDate()} ${MONTHS_NAMES[d.getMonth()]} ${yyyy}`,
+    timeText: `${h}:${m} WIB`,
+    timestamp: d.getTime(),
   };
+}
 
-  const addTransaction = (data: OrderFormData, targetDayId?: string, customDate?: Date) => {
+export function TransactionProvider({ children, db }: { children: React.ReactNode; db: SQLiteDatabase }) {
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+
+  const reloadTransactions = useCallback(async () => {
+    try {
+      const svc = new TransactionService(db);
+      const dbList = await svc.getTransactions(500);
+      setTransactions(dbList.map(mapDbToTransactionItem));
+      
+      const custRepo = new CustomerRepository(db);
+      const custList = await custRepo.getAllCustomers();
+      setCustomers(custList);
+    } catch (err) {
+      console.log('Error loading data from DB:', err);
+    }
+  }, [db]);
+
+  useEffect(() => {
+    reloadTransactions();
+  }, [reloadTransactions]);
+
+  const addTransaction = async (data: OrderFormData, targetDayId?: string, customDate?: Date) => {
     const qty = data.quantity || 1;
     const price = data.price || 0;
     const total = qty * price;
     const now = customDate || new Date();
-    const dayMap = ['day-sun', 'day-mon', 'day-tue', 'day-wed', 'day-thu', 'day-fri', 'day-sat'];
-    const assignedDayId = targetDayId || dayMap[now.getDay()];
 
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    const timeText = `${h}:${m} WIB`;
-    
-    // Format full date text
-    const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    
-    const fullDateText = `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
-
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const monthKey = `${yyyy}-${mm}`;
-    const dateKey = `${yyyy}-${mm}-${dd}`;
-
-    const dateNum = now.getDate();
-    let weekKey = 'W1';
-    if (dateNum > 28) weekKey = 'W5';
-    else if (dateNum > 21) weekKey = 'W4';
-    else if (dateNum > 14) weekKey = 'W3';
-    else if (dateNum > 7) weekKey = 'W2';
-
-    const isDebt = data.paymentMethod === 'Hutang';
-    const assignedDebtor = isDebt ? (data.debtorName?.trim() || 'Tanpa Nama') : undefined;
-    const assignedDebtStatus = isDebt ? (data.debtStatus || 'Belum Lunas') : 'Lunas';
-
-    const newTrx: TransactionItem = {
-      id: 'trx-' + Date.now(),
-      name: data.name,
-      category: data.category || 'Umum',
-      quantity: qty,
-      unit: data.unit || 'Pcs',
-      price: price,
-      total: total,
-      paymentMethod: data.paymentMethod || 'Lunas',
-      transactionType: data.transactionType || 'IN',
-      debtorName: assignedDebtor,
-      debtStatus: assignedDebtStatus,
-      monthKey,
-      weekKey,
-      dateKey,
-      dayId: assignedDayId,
-      fullDateText,
-      timeText,
-      timestamp: now.getTime(),
-    };
-
-    setTransactions((prev) => {
-      const updated = [newTrx, ...prev];
-      saveTransactions(updated);
-      return updated;
-    });
-  };
-
-  const updateTransaction = (id: string, data: Partial<OrderFormData>) => {
-    setTransactions((prev) => {
-      const updated = prev.map((item) => {
-        if (item.id === id) {
-          const qty = data.quantity !== undefined ? data.quantity : item.quantity;
-          const price = data.price !== undefined ? data.price : item.price;
-          const total = qty * price;
-          const isDebt = (data.paymentMethod ?? item.paymentMethod) === 'Hutang';
-
-          return {
-            ...item,
-            name: data.name ?? item.name,
-            category: data.category ?? item.category,
-            quantity: qty,
-            unit: data.unit ?? item.unit,
-            price: price,
-            total: total,
-            paymentMethod: (data.paymentMethod ?? item.paymentMethod) as 'Lunas' | 'Hutang',
-            transactionType: (data.transactionType ?? item.transactionType) as 'IN' | 'OUT',
-            debtorName: isDebt ? (data.debtorName ?? item.debtorName ?? 'Tanpa Nama') : undefined,
-            debtStatus: isDebt ? (data.debtStatus ?? item.debtStatus ?? 'Belum Lunas') : 'Lunas',
-          };
-        }
-        return item;
+    try {
+      const svc = new TransactionService(db);
+      await svc.createTransaction({
+        transaction_date: toSQLiteDateTime(now),
+        transaction_type: data.transactionType || 'IN',
+        category_id: data.transactionType === 'OUT' ? 4 : 1,
+        cash_id: 1,
+        nominal: total,
+        quantity: qty,
+        unit_price: price,
+        payment_method: data.paymentMethod || 'Lunas',
+        description: data.name,
+        customer_name: data.debtorName,
       });
-      saveTransactions(updated);
-      return updated;
-    });
+      await reloadTransactions();
+    } catch (err) {
+      console.log('Error adding transaction:', err);
+    }
   };
 
-  const deleteTransaction = (id: string) => {
-    setTransactions((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      saveTransactions(updated);
-      return updated;
-    });
-  };
+  const updateTransaction = async (id: string, data: Partial<OrderFormData>) => {
+    try {
+      const svc = new TransactionService(db);
+      const qty = data.quantity;
+      const price = data.price;
+      const nominal = qty !== undefined && price !== undefined ? qty * price : undefined;
 
-  // Mark debt as Paid (Lunas) or toggle back to Belum Lunas
-  const toggleDebtStatus = (id: string) => {
-    setTransactions((prev) => {
-      const updated = prev.map((item) => {
-        if (item.id === id) {
-          const newStatus: 'Belum Lunas' | 'Lunas' =
-            item.debtStatus === 'Belum Lunas' ? 'Lunas' : 'Belum Lunas';
-          return {
-            ...item,
-            debtStatus: newStatus,
-            paymentMethod: newStatus === 'Lunas' ? ('Lunas' as const) : ('Hutang' as const),
-          };
-        }
-        return item;
+      await svc.updateTransaction(id, {
+        transaction_type: data.transactionType,
+        nominal: nominal,
+        quantity: qty,
+        unit_price: price,
+        payment_method: data.paymentMethod,
+        description: data.name,
+        customer_name: data.debtorName,
       });
-      saveTransactions(updated);
-      return updated;
-    });
+      await reloadTransactions();
+    } catch (err) {
+      console.log('Error updating transaction:', err);
+    }
   };
 
-  // Settle all unpaid debts for a specific person in one action
-  const settleAllDebtsForPerson = (debtorName: string) => {
-    const target = debtorName.trim().toLowerCase();
-    setTransactions((prev) => {
-      const updated = prev.map((item) => {
-        if ((item.debtorName || '').trim().toLowerCase() === target) {
-          return {
-            ...item,
-            debtStatus: 'Lunas' as const,
-            paymentMethod: 'Lunas' as const,
-          };
+  const deleteTransaction = async (id: string) => {
+    try {
+      const svc = new TransactionService(db);
+      await svc.deleteTransaction(id);
+      await reloadTransactions();
+    } catch (err) {
+      console.log('Error deleting transaction:', err);
+    }
+  };
+
+  const toggleDebtStatus = async (id: string) => {
+    try {
+      const existing = transactions.find((t) => t.id === id);
+      if (!existing) return;
+
+      const svc = new TransactionService(db);
+      if (existing.debtStatus === 'Belum Lunas') {
+        await svc.markDebtPaid(id);
+      }
+      await reloadTransactions();
+    } catch (err) {
+      console.log('Error toggling debt status:', err);
+    }
+  };
+
+  const settleAllDebtsForPerson = async (debtorName: string) => {
+    try {
+      const svc = new TransactionService(db);
+      const debts = await svc.getDebts();
+      const target = debtorName.trim().toLowerCase();
+
+      for (const debt of debts) {
+        if ((debt.customer_name || '').trim().toLowerCase() === target) {
+          await svc.markDebtPaid(debt.id);
         }
-        return item;
-      });
-      saveTransactions(updated);
-      return updated;
-    });
+      }
+      await reloadTransactions();
+    } catch (err) {
+      console.log('Error settling debts:', err);
+    }
   };
 
   const getTransactionsByDay = (dayId: string, type?: 'IN' | 'OUT') => {
@@ -547,27 +217,21 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     return transactions.filter((t) => t.paymentMethod === 'Hutang');
   };
 
-  const markDebtAsPaid = (id: string) => {
-    setTransactions((prev) => {
-      const updated = prev.map((item) => {
-        if (item.id === id) {
-          return {
-            ...item,
-            debtStatus: 'Lunas' as const,
-            paymentMethod: 'Lunas' as const,
-          };
-        }
-        return item;
-      });
-      saveTransactions(updated);
-      return updated;
-    });
+  const markDebtAsPaid = async (id: string) => {
+    try {
+      const svc = new TransactionService(db);
+      await svc.markDebtPaid(id);
+      await reloadTransactions();
+    } catch (err) {
+      console.log('Error marking debt as paid:', err);
+    }
   };
 
   return (
     <TransactionContext.Provider
       value={{
         transactions,
+        customers,
         addTransaction,
         updateTransaction,
         deleteTransaction,

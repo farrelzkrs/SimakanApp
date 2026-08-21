@@ -58,11 +58,11 @@ export default function OrderModal({
   defaultType = 'IN',
 }: OrderModalProps) {
   const router = useRouter();
-  const { inventoryItems, adjustStockByItemName, registerOrRestockExpenseItem } = useInventory();
-  const { transactions } = useTransactions();
+  const { inventoryItems } = useInventory();
+  const { transactions, customers } = useTransactions();
   const isEditing = !!initialData?.id;
 
-  const nameHistory = Array.from(new Set(transactions.map((t) => t.debtorName).filter((n) => n && n !== 'Admin')));
+  const nameHistory = customers ? customers.map(c => c.name).filter(n => n !== 'Admin') : [];
 
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
   const [name, setName] = useState('');
@@ -213,21 +213,6 @@ export default function OrderModal({
 
     const parsedPrice = parseFloat(priceInput.replace(/[^0-9]/g, '')) || price || 0;
 
-    if (transactionType === 'IN') {
-      // Pemasukan (Penjualan): Deduct inventory stock
-      adjustStockByItemName(name.trim(), -quantity);
-    } else {
-      // Pengeluaran (Pembelian / Restock):
-      // Automatically register new item in inventory or restock existing item!
-      registerOrRestockExpenseItem({
-        name: name.trim(),
-        category: category.trim() || 'Makanan',
-        quantity,
-        unit,
-        price: parsedPrice,
-      });
-    }
-
     onSave({
       id: initialData?.id,
       name: name.trim(),
@@ -238,7 +223,7 @@ export default function OrderModal({
       price: parsedPrice,
       paymentMethod,
       transactionType,
-      debtorName: paymentMethod === 'Hutang' ? debtorName.trim() : undefined,
+      debtorName: debtorName.trim() || undefined,
       debtStatus: paymentMethod === 'Hutang' ? debtStatus : 'Lunas',
     });
 
@@ -360,40 +345,38 @@ export default function OrderModal({
                   </TouchableOpacity>
                 </View>
 
-                {/* DYNAMIC FIELD: NAMA PEMBELI / SANTRI */}
-                {transactionType === 'IN' && (
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>
-                      Nama Santri <Text style={styles.requiredStar}>*</Text>
-                    </Text>
-                    <View style={styles.debtorInputBox}>
-                      <Ionicons name="person" size={18} color="#D97706" style={{ marginRight: 8 }} />
-                      <TextInput
-                        style={styles.debtorInputText}
-                        placeholder="Nama Santri (cth: Mas Fajar)..."
-                        placeholderTextColor="#A1A1AA"
-                        value={debtorName}
-                        onChangeText={setDebtorName}
-                      />
-                    </View>
-                    {nameHistory.length > 0 && (
-                      <View style={{ marginTop: 8 }}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          {nameHistory.map((n, idx) => (
-                            <TouchableOpacity
-                              key={idx}
-                              activeOpacity={0.7}
-                              style={styles.historyChip}
-                              onPress={() => setDebtorName(n!)}
-                            >
-                              <Text style={styles.historyChipText}>{n}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
+                {/* DYNAMIC FIELD: NAMA PEMBELI / PENERIMA */}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>
+                    {transactionType === 'IN' ? 'Nama Santri / Pembeli' : 'Nama Penerima / Toko'} <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.debtorInputBox}>
+                    <Ionicons name={transactionType === 'IN' ? "person" : "storefront"} size={18} color="#D97706" style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.debtorInputText}
+                      placeholder={transactionType === 'IN' ? "Nama (cth: Mas Fajar)..." : "Nama (cth: Toko ABC)..."}
+                      placeholderTextColor="#A1A1AA"
+                      value={debtorName}
+                      onChangeText={setDebtorName}
+                    />
                   </View>
-                )}
+                  {nameHistory.length > 0 && (
+                    <View style={{ marginTop: 8 }}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        {nameHistory.map((n, idx) => (
+                          <TouchableOpacity
+                            key={idx}
+                            activeOpacity={0.7}
+                            style={styles.historyChip}
+                            onPress={() => setDebtorName(n!)}
+                          >
+                            <Text style={styles.historyChipText}>{n}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
 
                 {/* FIELD 1: PILIH BARANG (PEMASUKAN = LOCKED PICKER ONLY WITH SEARCH BAR) */}
                 <View style={styles.formGroup}>
@@ -605,9 +588,31 @@ export default function OrderModal({
                       </TouchableOpacity>
                     </View>
                   </View>
-
-                  {/* Empty space block for maintaining layout proportions */}
-                  <View style={[styles.formGroup, { flex: 1 }]} />
+                  {/* Harga Satuan */}
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>
+                      Harga Satuan <Text style={styles.requiredStar}>*</Text>
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, paddingHorizontal: 12, height: 48 }}>
+                      <Text style={{ color: '#64748B', fontWeight: '600', marginRight: 4 }}>Rp</Text>
+                      <TextInput
+                        style={{ flex: 1, fontSize: 15, color: '#0F172A', fontWeight: '600' }}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor="#94A3B8"
+                        value={priceInput}
+                        editable={transactionType === 'OUT' || !isExactItemInInventory}
+                        onChangeText={(val) => {
+                          const numeric = val.replace(/[^0-9]/g, '');
+                          if (!numeric) {
+                            setPriceInput('');
+                            return;
+                          }
+                          setPriceInput(parseInt(numeric, 10).toLocaleString('en-US'));
+                        }}
+                      />
+                    </View>
+                  </View>
                 </View>
 
 
@@ -684,32 +689,31 @@ export default function OrderModal({
                 </View>
 
                 {/* ACTIONS */}
-                <View style={styles.actionRow}>
-                  {isEditing && onDelete && (
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.deleteBtn}
-                      onPress={handleDelete}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity activeOpacity={0.8} style={styles.cancelBtn} onPress={onClose}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 8, paddingHorizontal: 4, gap: 10 }}>
+                  <TouchableOpacity activeOpacity={0.8} style={[styles.cancelBtn, { flex: 1 }]} onPress={onClose}>
                     <Text style={styles.cancelBtnText}>Batal</Text>
                   </TouchableOpacity>
+
+                  {isEditing && (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' }}
+                      onPress={handleDelete}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#DC2626' }}>Hapus</Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     activeOpacity={0.85}
                     style={[
                       styles.saveBtn,
                       transactionType === 'IN' ? styles.saveBtnIn : styles.saveBtnOut,
+                      { flex: 1 }
                     ]}
                     onPress={handleSave}
                   >
-                    <Text style={styles.saveBtnText}>
-                      Simpan
-                    </Text>
+                    <Text style={styles.saveBtnText}>Simpan</Text>
                   </TouchableOpacity>
                 </View>
               </ScrollView>

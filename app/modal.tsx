@@ -21,26 +21,12 @@ export default function ModalScreen() {
 
   const handleSave = async (data: OrderFormData) => {
     try {
-      if (db) {
-        const service = new TransactionService(db);
-        await service.createTransaction({
-          transaction_date: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          transaction_type: data.transactionType,
-          category_id: data.transactionType === 'IN' ? 1 : 4,
-          nominal: data.price * data.quantity,
-          quantity: data.quantity,
-          unit_price: data.price,
-          payment_method: data.paymentMethod,
-          description: `${data.name} (${data.category})`,
-        });
-      }
+      // Sync with Central Transaction Context for Rekap (also saves to DB)
+      await addTransaction(data);
 
-      // Sync with Central Transaction Context for Rekap
-      addTransaction(data);
-
-      // Sync with Inventory Context
+      // Sync with Inventory Context (also saves to DB)
       if (data.transactionType === 'OUT') {
-        registerOrRestockExpenseItem({
+        await registerOrRestockExpenseItem({
           name: data.name,
           category: data.category,
           quantity: data.quantity,
@@ -48,7 +34,7 @@ export default function ModalScreen() {
           price: data.price,
         });
       } else {
-        adjustStockByItemName(data.name, -data.quantity);
+        await adjustStockByItemName(data.name, -data.quantity);
       }
 
       Alert.alert('Sukses', 'Pesanan berhasil disimpan!');

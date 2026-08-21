@@ -189,9 +189,9 @@ export default function RekapPemasukanScreen() {
     );
   };
 
-  const handleSaveTransaction = (data: OrderFormData) => {
-    addTransaction(data);
-    adjustStockByItemName(data.name, -data.quantity);
+  const handleSaveTransaction = async (data: OrderFormData) => {
+    await addTransaction(data);
+    await adjustStockByItemName(data.name, -data.quantity);
     setOrderModalVisible(false);
   };
 
@@ -359,12 +359,13 @@ export default function RekapPemasukanScreen() {
 
           {/* Horizontal Scrollable Table Wrapper */}
           {filteredTransactions.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.horizontalScroll}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.horizontalScroll} contentContainerStyle={{ flexGrow: 1 }}>
               <View style={styles.tableStructure}>
                 {/* Table Header Row */}
                 <View style={styles.tableHeaderRow}>
                   <Text style={[styles.thText, { width: 44, textAlign: 'center' }]}>No</Text>
                   <Text style={[styles.thText, { width: 140 }]}>Tanggal & Waktu</Text>
+                  <Text style={[styles.thText, { width: 160 }]}>Nama Pembeli</Text>
                   <Text style={[styles.thText, { width: 180 }]}>Barang / Menu</Text>
                   <Text style={[styles.thText, { width: 110 }]}>Kategori</Text>
                   <Text style={[styles.thText, { width: 75, textAlign: 'center' }]}>Qty</Text>
@@ -380,7 +381,7 @@ export default function RekapPemasukanScreen() {
                   const isEven = index % 2 === 0;
                   return (
                     <View
-                      key={item.id}
+                      key={item.id ? String(item.id) : `fallback-${index}`}
                       style={[styles.tableDataRow, isEven ? styles.rowEven : styles.rowOdd]}
                     >
                       {/* No */}
@@ -397,8 +398,15 @@ export default function RekapPemasukanScreen() {
                         <Text style={styles.timeTagText}>{item.timeText}</Text>
                       </View>
 
+                      {/* Nama Pembeli */}
+                      <View style={{ width: 160, paddingRight: 8, justifyContent: 'center' }}>
+                        <Text style={[styles.itemTitleText, { fontSize: 13, color: '#334155' }]}>
+                          {item.debtorName && item.debtorName !== 'Admin' ? item.debtorName : '-'}
+                        </Text>
+                      </View>
+
                       {/* Nama Menu */}
-                      <View style={{ width: 180, paddingRight: 8 }}>
+                      <View style={{ width: 180, paddingRight: 8, justifyContent: 'center' }}>
                         <Text style={styles.itemTitleText}>{item.name}</Text>
                       </View>
 
@@ -465,7 +473,7 @@ export default function RekapPemasukanScreen() {
 
                 {/* Table Summary Footer Row */}
                 <View style={styles.tableFooterRow}>
-                  <View style={{ width: 474, paddingLeft: 12 }}>
+                  <View style={{ width: 634, paddingLeft: 12 }}>
                     <Text style={styles.footerLabelTitle}>TOTAL KESELURUHAN REKAP</Text>
                     <Text style={styles.footerLabelSub}>
                       {filteredTransactions.length} Transaksi Terpilih
