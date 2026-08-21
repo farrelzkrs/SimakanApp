@@ -1,25 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Dimensions,
-  SafeAreaView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { Image } from 'expo-image';
-import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const ONBOARDING_KEY = '@simakan_has_onboarded';
 
 // SVG Wave data URI representing the exact organic swoop curve between top teal header and white bottom section
-const WAVE_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzUgMTIwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48cGF0aCBkPSJNMCwwIEwzNzUsMCBMMzc1LDE1IEMyODAsOTAgMTQwLDEyNSAwLDYwIFoiIGZpbGw9IiMxNEEzOUYiLz48L3N2Zz4=`;
+const WAVE_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzUgMTIwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48cGF0aCBkPSJNMCwwIEwzNzUsMCBMMzc1LDE1IEMyODAsOTAgMTQwLDEyNSAwLDYwIFoiIGZpbGw9IiNEQzI2MjYiLz48L3N2Zz4=`;
 
 function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
   return (
@@ -33,7 +33,7 @@ function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
           {/* Character Illustration */}
           <View style={styles.illustrationContainer}>
             <Image
-              source={require('@/assets/images/onboarding_character.png')}
+              source={require('@/assets/images/logo-simakan-aja.png')}
               style={styles.illustrationImage}
               contentFit="contain"
             />
@@ -77,10 +77,11 @@ function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
 
 import DashboardScreen from '@/components/screens/DashboardScreen';
 import InventoryScreen from '@/components/screens/InventoryScreen';
-import StatisticsScreen from '@/components/screens/StatisticsScreen';
 import RekapPemasukanScreen from '@/components/screens/RekapPemasukanScreen';
 import RekapPengeluaranScreen from '@/components/screens/RekapPengeluaranScreen';
-import { useAppNavigation, NavigationProvider } from '@/context/NavigationContext';
+import SplashScreen from '@/components/screens/SplashScreen';
+import StatisticsScreen from '@/components/screens/StatisticsScreen';
+import { NavigationProvider, useAppNavigation } from '@/context/NavigationContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function MainApp() {
@@ -155,6 +156,7 @@ function MainApp() {
 export default function App() {
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [hasOnboarded, setHasOnboarded] = useState(false);
+  const [isSplashComplete, setSplashComplete] = useState(false);
 
   useEffect(() => {
     async function checkFirstLaunch() {
@@ -181,23 +183,29 @@ export default function App() {
     setHasOnboarded(true);
   };
 
+  let content;
   if (checkingOnboarding) {
-    return (
-      <View style={[styles.container, { backgroundColor: '#14A39F', justifyContent: 'center', alignItems: 'center' }]}>
+    content = (
+      <View style={[styles.container, { backgroundColor: '#DC2626', justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar style="light" />
         <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
     );
-  }
-
-  if (!hasOnboarded) {
-    return <OnboardingScreen onFinish={handleFinishOnboarding} />;
+  } else if (!hasOnboarded) {
+    content = <OnboardingScreen onFinish={handleFinishOnboarding} />;
+  } else {
+    content = (
+      <NavigationProvider>
+        <MainApp />
+      </NavigationProvider>
+    );
   }
 
   return (
-    <NavigationProvider>
-      <MainApp />
-    </NavigationProvider>
+    <View style={{ flex: 1 }}>
+      {content}
+      {!isSplashComplete && <SplashScreen onFinish={() => setSplashComplete(true)} />}
+    </View>
   );
 }
 
@@ -214,7 +222,7 @@ const styles = StyleSheet.create({
   tealBackground: {
     width: '100%',
     height: '84%',
-    backgroundColor: '#14A39F',
+    backgroundColor: '#DC2626',
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 50 : 30,
@@ -267,13 +275,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   getStartedButton: {
-    backgroundColor: '#14A39F',
+    backgroundColor: '#DC2626',
     width: '78%',
     paddingVertical: 15,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#14A39F',
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,

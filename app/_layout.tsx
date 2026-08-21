@@ -1,8 +1,13 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Animated, StyleSheet } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
+
+// Mencegah splash screen bawaan hilang sebelum kita siap
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useDatabase } from '@/hooks/use-database';
@@ -19,9 +24,7 @@ export default function RootLayout() {
 
   if (!isReady || !db) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A' }}>
-        <ActivityIndicator size="large" color="#14A39F" />
-      </View>
+      <View style={{ flex: 1, backgroundColor: '#ffffff' }} />
     );
   }
 
@@ -39,7 +42,6 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="index" options={{ headerShown: false, animation: 'fade' }} />
-
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen
               name="modal"
