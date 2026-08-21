@@ -15,7 +15,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/context/NavigationContext';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
 import { useTransactions, TransactionItem } from '@/context/TransactionContext';
 import { useInventory } from '@/context/InventoryContext';
@@ -45,13 +45,13 @@ const WEEK_OPTIONS = [
   { id: 'W5', label: 'Minggu Ke-5 (29 - 31)', shortLabel: 'Minggu 5' },
 ];
 
-export default function RekapPengeluaranScreen() {
-  const router = useRouter();
+export default function RekapPemasukanScreen() {
+  const { goBack } = useAppNavigation();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
   const { transactions, addTransaction, deleteTransaction } = useTransactions();
-  const { registerOrRestockExpenseItem } = useInventory();
+  const { adjustStockByItemName } = useInventory();
 
   // Cascading Filter States
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
@@ -70,10 +70,10 @@ export default function RekapPengeluaranScreen() {
       { id: 'ALL', label: 'Semua Hari & Tanggal', shortLabel: 'Semua' },
     ];
 
-    // Find dates that exist in transactions for expense
+    // Find dates that exist in transactions or generate typical dates
     const matchedDates = new Set<string>();
     transactions.forEach((t) => {
-      if (t.transactionType === 'OUT') {
+      if (t.transactionType === 'IN') {
         const matchMonth = selectedMonth === 'ALL' || t.monthKey === selectedMonth;
         const matchWeek = selectedWeek === 'ALL' || t.weekKey === selectedWeek;
         if (matchMonth && matchWeek && t.dateKey) {
@@ -119,10 +119,10 @@ export default function RekapPengeluaranScreen() {
     return options;
   }, [selectedMonth, selectedWeek, transactions]);
 
-  // Filtered Transactions for Rekap Pengeluaran
+  // Filtered Transactions for Rekap Pemasukan
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
-      if (t.transactionType !== 'OUT') return false;
+      if (t.transactionType !== 'IN') return false;
       if (selectedMonth !== 'ALL' && t.monthKey !== selectedMonth) return false;
       if (selectedWeek !== 'ALL' && t.weekKey !== selectedWeek) return false;
       if (selectedDate !== 'ALL' && t.dateKey !== selectedDate) return false;
@@ -175,7 +175,7 @@ export default function RekapPengeluaranScreen() {
   const handleDeleteItem = (id: string, name: string) => {
     Alert.alert(
       'Hapus Transaksi',
-      `Yakin ingin menghapus item "${name}" dari rekap pengeluaran?`,
+      `Yakin ingin menghapus item "${name}" dari rekap?`,
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -191,13 +191,7 @@ export default function RekapPengeluaranScreen() {
 
   const handleSaveTransaction = async (data: OrderFormData) => {
     await addTransaction(data);
-    await registerOrRestockExpenseItem({
-      name: data.name,
-      category: data.category,
-      quantity: data.quantity,
-      unit: data.unit,
-      price: data.price,
-    });
+    await adjustStockByItemName(data.name, -data.quantity);
     setOrderModalVisible(false);
   };
 
@@ -205,19 +199,19 @@ export default function RekapPengeluaranScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Top Banner Header (Orange/Red for Pengeluaran) */}
+      {/* Top Banner Header (Teal for Pemasukan) */}
       <View style={styles.topHeaderBackground}>
         <SafeAreaView style={styles.headerSafeArea}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               activeOpacity={0.7}
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={() => goBack()}
             >
               <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>Rekap Pengeluaran</Text>
+            <Text style={styles.headerTitle}>Rekap Pemasukan</Text>
 
             <TouchableOpacity
               activeOpacity={0.7}
@@ -233,7 +227,7 @@ export default function RekapPengeluaranScreen() {
             {/* Filter Breadcrumb */}
             <View style={styles.filterBreadcrumbRow}>
               <View style={styles.badgeIndicator}>
-                <Ionicons name="funnel" size={12} color="#EA580C" />
+                <Ionicons name="funnel" size={12} color="#14A39F" />
                 <Text style={styles.badgeIndicatorText}>Periode Aktif</Text>
               </View>
               <Text style={styles.breadcrumbText} numberOfLines={1}>
@@ -262,8 +256,8 @@ export default function RekapPengeluaranScreen() {
               <View style={styles.verticalDivider} />
 
               <View style={styles.metricColumn}>
-                <Text style={styles.metricLabel}>Total Pengeluaran</Text>
-                <Text style={styles.metricValExpense}>{formatRupiah(totalAmount)}</Text>
+                <Text style={styles.metricLabel}>Total Pemasukan</Text>
+                <Text style={styles.metricValIncome}>{formatRupiah(totalAmount)}</Text>
               </View>
             </View>
           </View>
@@ -280,7 +274,7 @@ export default function RekapPengeluaranScreen() {
         <View style={styles.filterSectionCard}>
           <View style={styles.filterSectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="options-outline" size={18} color="#EA580C" style={{ marginRight: 6 }} />
+              <Ionicons name="options-outline" size={18} color="#14A39F" style={{ marginRight: 6 }} />
               <Text style={styles.filterSectionTitle}>Filter Rekap Bertingkat</Text>
             </View>
             {(selectedMonth !== '2026-08' || selectedWeek !== 'ALL' || selectedDate !== 'ALL') && (
@@ -349,14 +343,14 @@ export default function RekapPengeluaranScreen() {
         </View>
 
         {/* ========================================================
-            REKAP TABEL (Expense Accounting Table View)
+            REKAP TABEL (Cashier / Accounting Table View)
         ======================================================== */}
         <View style={styles.tableCardContainer}>
           {/* Table Card Top Bar */}
           <View style={styles.tableCardTopBar}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="grid" size={18} color="#EA580C" style={{ marginRight: 8 }} />
-              <Text style={styles.tableCardTitle}>Tabel Rekapitulasi Pengeluaran</Text>
+              <Ionicons name="grid" size={18} color="#14A39F" style={{ marginRight: 8 }} />
+              <Text style={styles.tableCardTitle}>Tabel Rekapitulasi Pemasukan</Text>
             </View>
             <View style={styles.countBadge}>
               <Text style={styles.countBadgeText}>{filteredTransactions.length} Transaksi</Text>
@@ -371,6 +365,7 @@ export default function RekapPengeluaranScreen() {
                 <View style={styles.tableHeaderRow}>
                   <Text style={[styles.thText, { width: 44, textAlign: 'center' }]}>No</Text>
                   <Text style={[styles.thText, { width: 140 }]}>Tanggal & Waktu</Text>
+                  <Text style={[styles.thText, { width: 160 }]}>Nama Pembeli</Text>
                   <Text style={[styles.thText, { width: 180 }]}>Barang / Menu</Text>
                   <Text style={[styles.thText, { width: 110 }]}>Kategori</Text>
                   <Text style={[styles.thText, { width: 75, textAlign: 'center' }]}>Qty</Text>
@@ -403,14 +398,21 @@ export default function RekapPengeluaranScreen() {
                         <Text style={styles.timeTagText}>{item.timeText}</Text>
                       </View>
 
+                      {/* Nama Pembeli */}
+                      <View style={{ width: 160, paddingRight: 8, justifyContent: 'center' }}>
+                        <Text style={[styles.itemTitleText, { fontSize: 13, color: '#334155' }]}>
+                          {item.debtorName && item.debtorName !== 'Admin' ? item.debtorName : '-'}
+                        </Text>
+                      </View>
+
                       {/* Nama Menu */}
-                      <View style={{ width: 180, paddingRight: 8 }}>
+                      <View style={{ width: 180, paddingRight: 8, justifyContent: 'center' }}>
                         <Text style={styles.itemTitleText}>{item.name}</Text>
                       </View>
 
                       {/* Kategori */}
                       <View style={{ width: 110, paddingRight: 8 }}>
-                        <View style={styles.categoryPillOrange}>
+                        <View style={styles.categoryPillTeal}>
                           <Text style={styles.categoryPillText}>{item.category}</Text>
                         </View>
                       </View>
@@ -428,7 +430,7 @@ export default function RekapPengeluaranScreen() {
                       </Text>
 
                       {/* Total */}
-                      <Text style={[styles.tdText, { width: 130, textAlign: 'right', fontWeight: '800', color: '#EF4444' }]}>
+                      <Text style={[styles.tdText, { width: 130, textAlign: 'right', fontWeight: '800', color: '#10B981' }]}>
                         {formatRupiah(item.total)}
                       </Text>
 
@@ -471,7 +473,7 @@ export default function RekapPengeluaranScreen() {
 
                 {/* Table Summary Footer Row */}
                 <View style={styles.tableFooterRow}>
-                  <View style={{ width: 474, paddingLeft: 12 }}>
+                  <View style={{ width: 634, paddingLeft: 12 }}>
                     <Text style={styles.footerLabelTitle}>TOTAL KESELURUHAN REKAP</Text>
                     <Text style={styles.footerLabelSub}>
                       {filteredTransactions.length} Transaksi Terpilih
@@ -485,7 +487,7 @@ export default function RekapPengeluaranScreen() {
                   <View style={{ width: 110 }} />
 
                   <View style={{ width: 130, alignItems: 'flex-end', paddingRight: 8 }}>
-                    <Text style={styles.footerGrandTotalExpense}>{formatRupiah(totalAmount)}</Text>
+                    <Text style={styles.footerGrandTotalIncome}>{formatRupiah(totalAmount)}</Text>
                   </View>
 
                   <View style={{ width: 150 }} />
@@ -498,7 +500,7 @@ export default function RekapPengeluaranScreen() {
               <View style={styles.emptyIconCircle}>
                 <Ionicons name="file-tray-outline" size={44} color="#94A3B8" />
               </View>
-              <Text style={styles.emptyTitle}>Tidak Ada Data Pengeluaran</Text>
+              <Text style={styles.emptyTitle}>Tidak Ada Data Pemasukan</Text>
               <Text style={styles.emptySubtitle}>
                 Tidak ada transaksi pada filter periode {selectedMonthObj.shortLabel}
                 {selectedWeek !== 'ALL' ? ` (${selectedWeekObj.shortLabel})` : ''}
@@ -506,25 +508,15 @@ export default function RekapPengeluaranScreen() {
               </Text>
               <TouchableOpacity
                 activeOpacity={0.8}
-                style={styles.emptyAddBtnOrange}
+                style={styles.emptyAddBtnTeal}
                 onPress={() => setOrderModalVisible(true)}
               >
                 <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.emptyAddBtnText}>Tambah Pengeluaran Baru</Text>
+                <Text style={styles.emptyAddBtnText}>Tambah Transaksi Baru</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
-
-        {/* Quick Floating Add Bar */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.bottomFloatingBtn}
-          onPress={() => setOrderModalVisible(true)}
-        >
-          <Ionicons name="add-circle" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.bottomFloatingBtnText}>+ Tambah Transaksi Pengeluaran</Text>
-        </TouchableOpacity>
       </View>
 
       {/* ========================================================
@@ -552,7 +544,7 @@ export default function RekapPengeluaranScreen() {
                           : 'today'
                       }
                       size={20}
-                      color="#EA580C"
+                      color="#14A39F"
                       style={{ marginRight: 8 }}
                     />
                     <Text style={styles.dropdownModalTitle}>
@@ -598,7 +590,7 @@ export default function RekapPengeluaranScreen() {
                             {opt.label}
                           </Text>
                           {isSelected && (
-                            <Ionicons name="checkmark-circle" size={20} color="#EA580C" />
+                            <Ionicons name="checkmark-circle" size={20} color="#14A39F" />
                           )}
                         </TouchableOpacity>
                       );
@@ -626,7 +618,7 @@ export default function RekapPengeluaranScreen() {
                             {opt.label}
                           </Text>
                           {isSelected && (
-                            <Ionicons name="checkmark-circle" size={20} color="#EA580C" />
+                            <Ionicons name="checkmark-circle" size={20} color="#14A39F" />
                           )}
                         </TouchableOpacity>
                       );
@@ -654,7 +646,7 @@ export default function RekapPengeluaranScreen() {
                             {opt.label}
                           </Text>
                           {isSelected && (
-                            <Ionicons name="checkmark-circle" size={20} color="#EA580C" />
+                            <Ionicons name="checkmark-circle" size={20} color="#14A39F" />
                           )}
                         </TouchableOpacity>
                       );
@@ -671,7 +663,7 @@ export default function RekapPengeluaranScreen() {
         visible={orderModalVisible}
         onClose={() => setOrderModalVisible(false)}
         onSave={handleSaveTransaction}
-        defaultType="OUT"
+        defaultType="IN"
       />
     </View>
   );
@@ -683,7 +675,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   topHeaderBackground: {
-    backgroundColor: '#EA580C',
+    backgroundColor: '#14A39F',
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     paddingBottom: 18,
@@ -732,7 +724,7 @@ const styles = StyleSheet.create({
   badgeIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#F0FDFA',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -741,7 +733,7 @@ const styles = StyleSheet.create({
   badgeIndicatorText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#EA580C',
+    color: '#14A39F',
     marginLeft: 4,
   },
   breadcrumbText: {
@@ -785,12 +777,12 @@ const styles = StyleSheet.create({
   metricValQty: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#EA580C',
+    color: '#14A39F',
   },
-  metricValExpense: {
+  metricValIncome: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#EF4444',
+    color: '#10B981',
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -844,8 +836,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   dropdownButtonActive: {
-    borderColor: '#EA580C',
-    backgroundColor: '#FFF7ED',
+    borderColor: '#14A39F',
+    backgroundColor: '#F0FDFA',
   },
   dropdownBtnContent: {
     flex: 1,
@@ -962,10 +954,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  categoryPillOrange: {
+  categoryPillTeal: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FFEDD5',
+    backgroundColor: '#E6FFFA',
+    borderColor: '#99F6E4',
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -974,7 +966,7 @@ const styles = StyleSheet.create({
   categoryPillText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#EA580C',
+    color: '#0D9488',
   },
   qtyText: {
     fontSize: 13,
@@ -1026,10 +1018,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
-  footerGrandTotalExpense: {
+  footerGrandTotalIncome: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#EF4444',
+    color: '#10B981',
   },
   /* EMPTY STATE */
   emptyContainer: {
@@ -1060,14 +1052,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 18,
   },
-  emptyAddBtnOrange: {
+  emptyAddBtnTeal: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EA580C',
+    backgroundColor: '#14A39F',
     paddingHorizontal: 18,
     paddingVertical: 11,
     borderRadius: 14,
-    shadowColor: '#EA580C',
+    shadowColor: '#14A39F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1083,10 +1075,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EA580C',
+    backgroundColor: '#14A39F',
     borderRadius: 16,
     paddingVertical: 14,
-    shadowColor: '#EA580C',
+    shadowColor: '#14A39F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -1142,7 +1134,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dropdownModalItemActive: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#F0FDFA',
   },
   dropdownModalItemText: {
     fontSize: 14,
@@ -1151,6 +1143,6 @@ const styles = StyleSheet.create({
   },
   dropdownModalItemTextActive: {
     fontWeight: '800',
-    color: '#EA580C',
+    color: '#14A39F',
   },
 });

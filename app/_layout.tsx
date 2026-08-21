@@ -39,27 +39,7 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="index" options={{ headerShown: false, animation: 'fade' }} />
-            <Stack.Screen name="dashboard" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
-            <Stack.Screen name="statistics" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
-            <Stack.Screen name="inventory" options={{ headerShown: false, animation: 'fade', animationDuration: 200 }} />
-            <Stack.Screen
-              name="rekap-pengeluaran"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                animationDuration: 240,
-                gestureEnabled: true,
-              }}
-            />
-            <Stack.Screen
-              name="rekap-pemasukan"
-              options={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                animationDuration: 240,
-                gestureEnabled: true,
-              }}
-            />
+
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen
               name="modal"

@@ -14,7 +14,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+
 import { useTransactions, TransactionItem } from '@/context/TransactionContext';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
 
@@ -39,7 +39,6 @@ interface DebtorGroup {
 }
 
 export default function StatisticsScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
@@ -51,7 +50,7 @@ export default function StatisticsScreen() {
     addTransaction,
   } = useTransactions();
 
-  const [activeNav, setActiveNav] = useState<'home' | 'debt' | 'wallet'>('debt');
+
   const [activeFilter, setActiveFilter] = useState<DebtFilterType>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -638,40 +637,6 @@ export default function StatisticsScreen() {
         initialData={editingItem}
         defaultType="IN"
       />
-
-      {/* Bottom Navigation Bar */}
-      <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav('home');
-            router.replace('/dashboard');
-          }}
-        >
-          <Ionicons name="home-outline" size={26} color="#94A3B8" />
-        </TouchableOpacity>
-
-        {/* 2. DAFTAR HUTANG TAB */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => setActiveNav('debt')}
-        >
-          <Ionicons name="book" size={24} color="#14A39F" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav('wallet');
-            router.replace('/inventory');
-          }}
-        >
-          <Ionicons name="cube-outline" size={26} color="#94A3B8" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
