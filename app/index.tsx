@@ -19,7 +19,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ONBOARDING_KEY = '@simakan_has_onboarded';
 
 // SVG Wave data URI representing the exact organic swoop curve between top teal header and white bottom section
-const WAVE_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzUgMTIwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48cGF0aCBkPSJNMCwwIEwzNzUsMCBMMzc1LDE1IEMyODAsOTAgMTQwLDEyNSAwLDYwIFoiIGZpbGw9IiNEQzI2MjYiLz48L3N2Zz4=`;
+const WAVE_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzUgMTIwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48cGF0aCBkPSJNMCwwIEwzNzUsMCBMMzc1LDE1IEMyODAsOTAgMTQwLDEyNSAwLDYwIFoiIGZpbGw9IiMxNEEzOUYiLz48L3N2Zz4=`;
 
 function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
   return (
@@ -33,7 +33,7 @@ function OnboardingScreen({ onFinish }: { onFinish: () => void }) {
           {/* Character Illustration */}
           <View style={styles.illustrationContainer}>
             <Image
-              source={require('@/assets/images/logo-simakan-aja.png')}
+              source={require('@/assets/images/onboarding_character.png')}
               style={styles.illustrationImage}
               contentFit="contain"
             />
@@ -186,7 +186,7 @@ export default function App() {
   let content;
   if (checkingOnboarding) {
     content = (
-      <View style={[styles.container, { backgroundColor: '#DC2626', justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, { backgroundColor: '#14A39F', justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar style="light" />
         <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
   tealBackground: {
     width: '100%',
     height: '84%',
-    backgroundColor: '#DC2626',
+    backgroundColor: '#14A39F',
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 50 : 30,
@@ -275,13 +275,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   getStartedButton: {
-    backgroundColor: '#DC2626',
+    backgroundColor: '#14A39F',
     width: '78%',
     paddingVertical: 15,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#DC2626',
+    shadowColor: '#14A39F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
