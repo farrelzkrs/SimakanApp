@@ -23,17 +23,11 @@ import { useInventory, InventoryItem } from '@/context/InventoryContext';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CATEGORIES = [
-  'Bahan Baku',
   'Makanan',
   'Minuman',
-  'Kemasan',
-  'Elektronik',
-  'Aksesoris',
-  'ATK',
-  'Operasional',
 ];
 
-const UNITS = ['Pcs', 'Cup', 'Kg', 'Pack', 'Karton', 'Box', 'Porsi', 'Unit', 'Rim'];
+const UNITS = ['Pcs', 'Dus'];
 
 export default function InventoryScreen() {
   const router = useRouter();
@@ -49,11 +43,13 @@ export default function InventoryScreen() {
   // Form State for Registering / Editing Inventory Item
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Bahan Baku');
-  const [stock, setStock] = useState(10);
+  const [category, setCategory] = useState('Makanan');
+  const [stock, setStock] = useState(1);
   const [unit, setUnit] = useState('Pcs');
+  const [sellingUnit, setSellingUnit] = useState('Pcs');
   const [priceInput, setPriceInput] = useState('');
-  const [minStockInput, setMinStockInput] = useState('5');
+  const [sellingPriceInput, setSellingPriceInput] = useState('');
+  const [pcsPerDus, setPcsPerDus] = useState('');
 
   const filteredItems = inventoryItems.filter((item) => {
     const matchesSearch =
@@ -75,11 +71,13 @@ export default function InventoryScreen() {
   const handleOpenAddModal = () => {
     setEditingId(null);
     setName('');
-    setCategory('Bahan Baku');
-    setStock(10);
+    setCategory('Makanan');
+    setStock(1);
     setUnit('Pcs');
+    setSellingUnit('Pcs');
     setPriceInput('');
-    setMinStockInput('5');
+    setSellingPriceInput('');
+    setPcsPerDus('');
     setModalVisible(true);
   };
 
@@ -88,9 +86,11 @@ export default function InventoryScreen() {
     setName(item.name);
     setCategory(item.category);
     setStock(item.stock);
-    setUnit(item.unit);
-    setPriceInput(item.price ? String(item.price) : '');
-    setMinStockInput(item.minStock ? String(item.minStock) : '5');
+    setUnit(item.unit === 'Dus' ? 'Dus' : 'Pcs');
+    setSellingUnit('Pcs');
+    setPriceInput(item.price ? parseInt(String(item.price), 10).toLocaleString('id-ID') : '');
+    setSellingPriceInput(item.sellingPrice ? parseInt(String(item.sellingPrice), 10).toLocaleString('id-ID') : '');
+    setPcsPerDus('');
     setModalVisible(true);
   };
 
@@ -101,25 +101,34 @@ export default function InventoryScreen() {
     }
 
     const parsedPrice = parseFloat(priceInput.replace(/[^0-9]/g, '')) || 0;
-    const parsedMinStock = parseInt(minStockInput, 10) || 5;
+    const parsedSellingPrice = parseFloat(sellingPriceInput.replace(/[^0-9]/g, '')) || 0;
+
+    let finalStock = stock;
+    let finalUnit = unit;
+
+    if (unit === 'Dus') {
+      const multiplier = parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1;
+      finalStock = stock * multiplier;
+      finalUnit = 'Pcs';
+    }
 
     if (editingId) {
       updateInventoryItem(editingId, {
         name: name.trim(),
         category,
-        stock,
-        unit,
+        stock: finalStock,
+        unit: finalUnit,
         price: parsedPrice,
-        minStock: parsedMinStock,
+        sellingPrice: parsedSellingPrice,
       });
     } else {
       addInventoryItem({
         name: name.trim(),
         category,
-        stock,
-        unit,
+        stock: finalStock,
+        unit: finalUnit,
         price: parsedPrice,
-        minStock: parsedMinStock,
+        sellingPrice: parsedSellingPrice,
       });
     }
 
@@ -153,15 +162,7 @@ export default function InventoryScreen() {
               </View>
             </View>
 
-            {/* "+ Daftarkan Barang" Button */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.headerAddBtn}
-              onPress={handleOpenAddModal}
-            >
-              <Ionicons name="add" size={20} color="#14A39F" style={{ marginRight: 2 }} />
-              <Text style={styles.headerAddBtnText}>Daftar Barang</Text>
-            </TouchableOpacity>
+
           </View>
 
           {/* 3 Metrics Cards Grid */}
@@ -252,17 +253,17 @@ export default function InventoryScreen() {
 
         {/* Section Header */}
         <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Daftar Stok Barang Inventori</Text>
+          <Text style={styles.sectionTitle}>Stok Barang</Text>
           <TouchableOpacity activeOpacity={0.8} style={styles.addInlineBtn} onPress={handleOpenAddModal}>
             <Ionicons name="add-circle-outline" size={16} color="#14A39F" style={{ marginRight: 4 }} />
-            <Text style={styles.addInlineBtnText}>Tambah Barang Baru</Text>
+            <Text style={styles.addInlineBtnText}>Tambah Barang</Text>
           </TouchableOpacity>
         </View>
 
         {/* Inventory Item Cards */}
         {filteredItems.length > 0 ? (
-          filteredItems.map((item) => (
-            <View key={item.id} style={styles.itemCard}>
+          filteredItems.map((item, index) => (
+            <View key={item.id ? String(item.id) : `fallback-${index}`} style={styles.itemCard}>
               <View style={styles.itemHeader}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.itemTitleRow}>
@@ -294,8 +295,16 @@ export default function InventoryScreen() {
                     <Text style={styles.itemCategory}>{item.category}</Text>
                     <Text style={styles.dotSeparator}>•</Text>
                     <Text style={styles.itemPricePerPicis}>
-                      Harga: <Text style={styles.priceHighlight}>{formatRupiah(item.price)}</Text> / {item.unit}
+                      Modal: <Text style={styles.priceHighlight}>{formatRupiah(item.price)}</Text>
                     </Text>
+                    {item.sellingPrice > 0 && (
+                      <>
+                        <Text style={styles.dotSeparator}>•</Text>
+                        <Text style={styles.itemPricePerPicis}>
+                          Jual: <Text style={styles.priceHighlightJual}>{formatRupiah(item.sellingPrice)}</Text>
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </View>
               </View>
@@ -351,10 +360,7 @@ export default function InventoryScreen() {
             <Text style={styles.emptySub}>
               Silakan daftarkan barang baru beserta stok awal dan harga per picis untuk menggunakannya di catatan transaksi.
             </Text>
-            <TouchableOpacity activeOpacity={0.8} style={styles.emptyAddBtn} onPress={handleOpenAddModal}>
-              <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyAddBtnText}>Daftarkan Barang Baru</Text>
-            </TouchableOpacity>
+
           </View>
         )}
       </ScrollView>
@@ -382,10 +388,7 @@ export default function InventoryScreen() {
                       </View>
                       <View>
                         <Text style={styles.modalTitle}>
-                          {editingId ? 'Edit Barang Inventori' : 'Daftar Barang Inventori'}
-                        </Text>
-                        <Text style={styles.modalSubtitle}>
-                          Masukkan rincian stok & harga per picis
+                          {editingId ? 'Edit Barang' : 'Tambah Stok Barang'}
                         </Text>
                       </View>
                     </View>
@@ -450,32 +453,119 @@ export default function InventoryScreen() {
                       </ScrollView>
                     </View>
 
-                    {/* Form Field 3: Harga Satuan Per Picis (Rp) */}
+                    {/* Form Field 3: Harga Satuan (Beli) */}
                     <View style={styles.fieldContainer}>
                       <Text style={styles.fieldLabel}>
-                        Harga per Picis / Unit (Rp) <Text style={styles.requiredStar}>*</Text>
+                        {unit === 'Dus' ? 'Harga Beli per Dus' : 'Harga Beli per Picis'}<Text style={styles.requiredStar}>*</Text>
                       </Text>
                       <View style={styles.inputPrefixBox}>
                         <Text style={styles.inputPrefixText}>Rp</Text>
                         <TextInput
                           style={styles.prefixedInput}
-                          placeholder="25.000"
+                          placeholder="Contoh: 25.000"
                           placeholderTextColor="#94A3B8"
                           keyboardType="numeric"
                           value={priceInput}
                           onChangeText={(val) => {
                             const numeric = val.replace(/[^0-9]/g, '');
-                            setPriceInput(numeric);
+                            if (!numeric) {
+                              setPriceInput('');
+                              return;
+                            }
+                            setPriceInput(parseInt(numeric, 10).toLocaleString('en-US'));
                           }}
                         />
                       </View>
+                      {unit === 'Dus' && pcsPerDus && priceInput ? (
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+                          * Harga beli per picis: <Text style={{ fontWeight: '600' }}>Rp {Math.round((parseInt(priceInput.replace(/[^0-9]/g, ''), 10) || 0) / (parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1)).toLocaleString('en-US')}</Text>
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    {/* Form Field 3.5: Harga Jual */}
+                    <View style={styles.fieldContainer}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>
+                          Harga Jual per {sellingUnit}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          <TouchableOpacity
+                            onPress={() => setSellingUnit('Pcs')}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#F1F5F9' },
+                              sellingUnit === 'Pcs' && { backgroundColor: '#0F172A' }
+                            ]}
+                          >
+                            <Text style={[{ fontSize: 12, fontWeight: '600', color: '#64748B' }, sellingUnit === 'Pcs' && { color: '#FFFFFF' }]}>Pcs</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => setSellingUnit('Dus')}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#F1F5F9' },
+                              sellingUnit === 'Dus' && { backgroundColor: '#0F172A' }
+                            ]}
+                          >
+                            <Text style={[{ fontSize: 12, fontWeight: '600', color: '#64748B' }, sellingUnit === 'Dus' && { color: '#FFFFFF' }]}>Dus</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.inputPrefixBox}>
+                        <Text style={styles.inputPrefixText}>Rp</Text>
+                        <TextInput
+                          style={[styles.prefixedInput, { flex: 1 }]}
+                          placeholder="Contoh: 30.000"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="numeric"
+                          value={sellingPriceInput}
+                          onChangeText={(val) => {
+                            const numeric = val.replace(/[^0-9]/g, '');
+                            if (!numeric) {
+                              setSellingPriceInput('');
+                              return;
+                            }
+                            setSellingPriceInput(parseInt(numeric, 10).toLocaleString('en-US'));
+                          }}
+                        />
+                        {sellingPriceInput ? (() => {
+                          const buyPriceNum = parseFloat(priceInput.replace(/[^0-9]/g, '')) || 0;
+                          const sellPriceNum = parseFloat(sellingPriceInput.replace(/[^0-9]/g, '')) || 0;
+                          const multiplier = parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1;
+                          
+                          let costPerPcs = unit === 'Dus' ? buyPriceNum / multiplier : buyPriceNum;
+                          let revenuePerPcs = sellingUnit === 'Dus' ? sellPriceNum / multiplier : sellPriceNum;
+                          
+                          let profit = revenuePerPcs - costPerPcs;
+                          let profitDisplay = sellingUnit === 'Dus' ? profit * multiplier : profit;
+                          profitDisplay = Math.round(profitDisplay);
+                          const isProfit = profitDisplay >= 0;
+
+                          return (
+                            <Text style={{ 
+                              fontSize: 14, 
+                              fontWeight: '700', 
+                              color: isProfit ? '#16A34A' : '#DC2626',
+                              marginLeft: 8,
+                              marginRight: 12
+                            }}>
+                              {isProfit ? '+' : '-'}{Math.abs(profitDisplay).toLocaleString('id-ID')}
+                            </Text>
+                          );
+                        })() : null}
+                      </View>
+                      {sellingUnit === 'Dus' && pcsPerDus && sellingPriceInput ? (
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+                          * Harga jual per picis: <Text style={{ fontWeight: '600' }}>Rp {Math.round((parseInt(sellingPriceInput.replace(/[^0-9]/g, ''), 10) || 0) / (parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1)).toLocaleString('en-US')}</Text>
+                        </Text>
+                      ) : null}
                     </View>
 
                     {/* Form Field 4: Stok Awal & Satuan Row */}
                     <View style={styles.rowTwoFields}>
                       {/* Stok Awal Counter */}
                       <View style={[styles.fieldContainer, { flex: 1.2, marginRight: 10 }]}>
-                        <Text style={styles.fieldLabel}>Stok Awal</Text>
+                        <Text style={styles.fieldLabel}>Jumlah</Text>
                         <View style={styles.stockCounterRow}>
                           <TouchableOpacity
                             style={styles.counterBtn}
@@ -501,17 +591,21 @@ export default function InventoryScreen() {
                         </View>
                       </View>
 
-                      {/* Batas Minim Stok Alert */}
+                      {/* Dus to Pcs logic */}
                       <View style={[styles.fieldContainer, { flex: 1 }]}>
-                        <Text style={styles.fieldLabel}>Alert Minim</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="5"
-                          placeholderTextColor="#94A3B8"
-                          keyboardType="numeric"
-                          value={minStockInput}
-                          onChangeText={setMinStockInput}
-                        />
+                        {unit === 'Dus' && (
+                          <>
+                            <Text style={styles.fieldLabel}>Isi per Dus (Pcs)</Text>
+                            <TextInput
+                              style={styles.textInput}
+                              placeholder="Cth: 24"
+                              placeholderTextColor="#94A3B8"
+                              keyboardType="numeric"
+                              value={pcsPerDus}
+                              onChangeText={setPcsPerDus}
+                            />
+                          </>
+                        )}
                       </View>
                     </View>
 
@@ -565,8 +659,7 @@ export default function InventoryScreen() {
                       style={styles.modalBtnSave}
                       onPress={handleSaveInventory}
                     >
-                      <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.modalBtnSaveText}>Simpan Barang</Text>
+                      <Text style={styles.modalBtnSaveText}>Simpan</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -591,11 +684,11 @@ export default function InventoryScreen() {
           style={styles.navItem}
           onPress={() => router.replace('/statistics')}
         >
-          <Ionicons name="receipt-outline" size={24} color="#94A3B8" />
+          <Ionicons name="book-outline" size={24} color="#94A3B8" />
         </TouchableOpacity>
 
         <TouchableOpacity activeOpacity={0.7} style={styles.navItem}>
-          <Ionicons name="card" size={26} color="#14A39F" />
+          <Ionicons name="cube" size={26} color="#14A39F" />
         </TouchableOpacity>
       </View>
     </View>
@@ -846,6 +939,10 @@ const styles = StyleSheet.create({
   priceHighlight: {
     fontWeight: '800',
     color: '#10B981',
+  },
+  priceHighlightJual: {
+    fontWeight: '800',
+    color: '#3B82F6',
   },
   stockProgressSection: {
     marginTop: 8,
@@ -1109,16 +1206,19 @@ const styles = StyleSheet.create({
   },
   modalFooterActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 16,
     gap: 10,
   },
   modalBtnCancel: {
+    flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 14,
     backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBtnCancelText: {
     fontSize: 13,
@@ -1126,8 +1226,10 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   modalBtnSave: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 14,

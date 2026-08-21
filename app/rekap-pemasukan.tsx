@@ -102,10 +102,15 @@ export default function RekapPemasukanScreen() {
       const parts = dStr.split('-');
       if (parts.length === 3) {
         const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-        const dayName = dObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
+        const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+        const MONTHS_LONG = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+        const dayName = `${DAYS[dObj.getDay()]}, ${dObj.getDate()} ${MONTHS_SHORT[dObj.getMonth()]}`;
+
         options.push({
           id: dStr,
-          label: dObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+          label: `${DAYS[dObj.getDay()]}, ${dObj.getDate()} ${MONTHS_LONG[dObj.getMonth()]} ${dObj.getFullYear()}`,
           shortLabel: dayName,
         });
       }
@@ -184,9 +189,9 @@ export default function RekapPemasukanScreen() {
     );
   };
 
-  const handleSaveTransaction = (data: OrderFormData) => {
-    addTransaction(data);
-    adjustStockByItemName(data.name, -data.quantity);
+  const handleSaveTransaction = async (data: OrderFormData) => {
+    await addTransaction(data);
+    await adjustStockByItemName(data.name, -data.quantity);
     setOrderModalVisible(false);
   };
 
@@ -260,9 +265,8 @@ export default function RekapPemasukanScreen() {
       </View>
 
       {/* Main Content Area */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + bottomInset }]}
+      <View
+        style={[styles.scrollContent, { flex: 1, paddingBottom: 40 + bottomInset }]}
       >
         {/* ========================================================
             CASCADING MULTI-DROPDOWN FILTER BAR (Bulan -> Minggu -> Hari)
@@ -349,18 +353,19 @@ export default function RekapPemasukanScreen() {
               <Text style={styles.tableCardTitle}>Tabel Rekapitulasi Pemasukan</Text>
             </View>
             <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{filteredTransactions.length} Baris</Text>
+              <Text style={styles.countBadgeText}>{filteredTransactions.length} Transaksi</Text>
             </View>
           </View>
 
           {/* Horizontal Scrollable Table Wrapper */}
           {filteredTransactions.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.horizontalScroll}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.horizontalScroll} contentContainerStyle={{ flexGrow: 1 }}>
               <View style={styles.tableStructure}>
                 {/* Table Header Row */}
                 <View style={styles.tableHeaderRow}>
                   <Text style={[styles.thText, { width: 44, textAlign: 'center' }]}>No</Text>
                   <Text style={[styles.thText, { width: 140 }]}>Tanggal & Waktu</Text>
+                  <Text style={[styles.thText, { width: 160 }]}>Nama Pembeli</Text>
                   <Text style={[styles.thText, { width: 180 }]}>Barang / Menu</Text>
                   <Text style={[styles.thText, { width: 110 }]}>Kategori</Text>
                   <Text style={[styles.thText, { width: 75, textAlign: 'center' }]}>Qty</Text>
@@ -371,11 +376,12 @@ export default function RekapPemasukanScreen() {
                 </View>
 
                 {/* Table Body Rows */}
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
                 {filteredTransactions.map((item, index) => {
                   const isEven = index % 2 === 0;
                   return (
                     <View
-                      key={item.id}
+                      key={item.id ? String(item.id) : `fallback-${index}`}
                       style={[styles.tableDataRow, isEven ? styles.rowEven : styles.rowOdd]}
                     >
                       {/* No */}
@@ -392,8 +398,15 @@ export default function RekapPemasukanScreen() {
                         <Text style={styles.timeTagText}>{item.timeText}</Text>
                       </View>
 
+                      {/* Nama Pembeli */}
+                      <View style={{ width: 160, paddingRight: 8, justifyContent: 'center' }}>
+                        <Text style={[styles.itemTitleText, { fontSize: 13, color: '#334155' }]}>
+                          {item.debtorName && item.debtorName !== 'Admin' ? item.debtorName : '-'}
+                        </Text>
+                      </View>
+
                       {/* Nama Menu */}
-                      <View style={{ width: 180, paddingRight: 8 }}>
+                      <View style={{ width: 180, paddingRight: 8, justifyContent: 'center' }}>
                         <Text style={styles.itemTitleText}>{item.name}</Text>
                       </View>
 
@@ -456,9 +469,11 @@ export default function RekapPemasukanScreen() {
                   );
                 })}
 
+                </ScrollView>
+
                 {/* Table Summary Footer Row */}
                 <View style={styles.tableFooterRow}>
-                  <View style={{ width: 474, paddingLeft: 12 }}>
+                  <View style={{ width: 634, paddingLeft: 12 }}>
                     <Text style={styles.footerLabelTitle}>TOTAL KESELURUHAN REKAP</Text>
                     <Text style={styles.footerLabelSub}>
                       {filteredTransactions.length} Transaksi Terpilih
@@ -502,17 +517,7 @@ export default function RekapPemasukanScreen() {
             </View>
           )}
         </View>
-
-        {/* Quick Floating Add Bar */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.bottomFloatingBtn}
-          onPress={() => setOrderModalVisible(true)}
-        >
-          <Ionicons name="add-circle" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.bottomFloatingBtnText}>+ Tambah Transaksi Pemasukan</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      </View>
 
       {/* ========================================================
           DROPDOWN SELECTION MODAL (Bulan / Minggu / Hari)
@@ -852,6 +857,7 @@ const styles = StyleSheet.create({
   },
   /* TABLE CARD CONTAINER */
   tableCardContainer: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
@@ -891,9 +897,10 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   horizontalScroll: {
-    flexGrow: 0,
+    flex: 1,
   },
   tableStructure: {
+    flex: 1,
     minWidth: 840,
   },
   tableHeaderRow: {

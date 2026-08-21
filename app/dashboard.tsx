@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,32 +9,26 @@ import {
   SafeAreaView,
   Platform,
   Alert,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
-import { useDatabase } from '@/hooks/use-database';
-import { TransactionService } from '@/services/TransactionService';
-import { useTransactions } from '@/context/TransactionContext';
+import { useTransactions, TransactionItem as ContextTransactionItem } from '@/context/TransactionContext';
 import { useInventory } from '@/context/InventoryContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// SVG Area Chart Data URI for Income graph (Teal Theme)
-const INCOME_CHART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMTRBMzlGIiBzdG9wLW9wYWNpdHk9IjAuNSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzE0QTM5RiIgc3RvcC1vcGFjaXR5PSIwLjA1Ii8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IEwzNTAsMTAwIEwwLDEwMCBaIiBmaWxsPSJ1cmwoI2dyYWQpIi8+PHBhdGggZD0iTTAsODAgQzUwLDUwIDgwLDcwIDEyMCw3MCBDMTYwLDcwIDE4MCw4NSAyMjAsNjUgQzI2MCw0NSAyODAsODAgMzUwLDQ1IiBmaWxsPSJub25lIiBzdHJva2U9IiMxNEEzOUYiIHN0cm9rZS13aWR0aD0iMi41Ii8+PC9zdmc+`;
-
-// SVG Area Chart Data URI for Expense graph (Coral/Salmon Red Theme)
-const EXPENSE_CHART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNTAgMTAwIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRSZWQiIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjRkE2QjZDIiBzdG9wLW9wYWNpdHk9IjAuNjUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNGQTZCNkMiIHN0b3Atb3BhY2l0eT0iMC4wNSIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGQ9Ik0wLDgwIEM0MCw5MCA3MCw2MCAxMTAsNjUgQzE1MCw3MCAxODAsOTAgMjIwLDcwIEMyNjAsNTAgMjgwLDY1IDM1MCw1NSBMMzUwLDEwMCBMMCwxMDAgWiIgZmlsbD0idXJsKCNncmFkUmVkKSIvPjxwYXRoIGQ9Ik0wLDgwIEM0MCw5MCA3MCw2MCAxMTAsNjUgQzE1MCw3MCAxODAsOTAgMjIwLDcwIEMyNjAsNTAgMjgwLDY1IDM1MCw1NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkE2QjZDIiBzdHJva2Utd2lkdGg9IjIuNSIvPjwvc3ZnPg==`;
-
-// Watermark Bottle/Device Vector SVG Data URI (Light Blue Silhouette)
 const WATERMARK_SVG_URI = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgMTQwIiBmaWxsPSJub25lIj48cGF0aCBkPSJNMjUgMzUgQyAyNSAxMCwgMTM1IDEwLCAxMzUgMzUgTCAxMzUgMTQwIEwgMjUgMTQwIFoiIGZpbGw9IiNFRUY0RkUiLz48cmVjdCB4PSIzMyIgeT0iNTAiIHdpZHRoPSI5NCIgaGVpZ2h0PSI4MCIgcng9IjgiIGZpbGw9IiNGRkZGRkYiLz48Y2lyY2xlIGN4PSI1OCIgY3k9IjkwIiByPSI4IiBmaWxsPSIjRUVGNEZFIi8+PGNpcmNsZSBjeD0iOTgiIGN5PSI5MCIgcj0iOCIgZmlsbD0iI0VFRjRGRSIvPjwvc3ZnPg==`;
 
-interface TransactionItem {
+interface DashboardTransactionItem {
   id: string;
   name: string;
+  debtorName?: string;
   category: string;
   date: string;
   amount: number;
@@ -45,106 +39,41 @@ interface TransactionItem {
   icon: string;
   bgColor: string;
   iconColor: string;
+  timestamp: number;
 }
 
-const INITIAL_TRANSACTIONS: TransactionItem[] = [
-  {
-    id: 'trx-1',
-    name: 'Maju Jaya Coffee',
-    category: 'Penjualan',
-    date: '4 Oktober 2020',
-    amount: 2000,
-    type: 'IN',
-    quantity: 1,
-    unit: 'Cup',
-    paymentMethod: 'Lunas',
-    icon: 'cafe-outline',
-    bgColor: '#FFEDD5',
-    iconColor: '#EA580C',
-  },
-  {
-    id: 'trx-2',
-    name: 'Zeus Motorworks',
-    category: 'Penjualan',
-    date: '4 Oktober 2020',
-    amount: 4000,
-    type: 'IN',
-    quantity: 1,
-    unit: 'Jasa',
-    paymentMethod: 'Lunas',
-    icon: 'settings-outline',
-    bgColor: '#E2E8F0',
-    iconColor: '#475569',
-  },
-  {
-    id: 'trx-3',
-    name: 'Desain Freelance',
-    category: 'Penjualan',
-    date: '4 Oktober 2020',
-    amount: 1000,
-    type: 'IN',
-    quantity: 1,
-    unit: 'Proyek',
-    paymentMethod: 'Lunas',
-    icon: 'color-palette-outline',
-    bgColor: '#FEF08A',
-    iconColor: '#CA8A04',
-  },
-  {
-    id: 'trx-4',
-    name: 'Uang Kos',
-    category: 'Uang Kos',
-    date: '4 Oktober 2020',
-    amount: 200,
-    type: 'OUT',
-    quantity: 1,
-    unit: 'Bulan',
-    paymentMethod: 'Hutang',
-    icon: 'home-outline',
-    bgColor: '#DBEAFE',
-    iconColor: '#2563EB',
-  },
-  {
-    id: 'trx-5',
-    name: 'Netflix',
-    category: 'Operasional',
-    date: '4 Oktober 2020',
-    amount: 12,
-    type: 'OUT',
-    quantity: 1,
-    unit: 'Bln',
-    paymentMethod: 'Lunas',
-    icon: 'tv-outline',
-    bgColor: '#FEE2E2',
-    iconColor: '#DC2626',
-  },
-  {
-    id: 'trx-6',
-    name: 'Konsumsi',
-    category: 'Konsumsi',
-    date: '4 Oktober 2020',
-    amount: 250,
-    type: 'OUT',
-    quantity: 2,
-    unit: 'Porsi',
-    paymentMethod: 'Lunas',
-    icon: 'restaurant-outline',
-    bgColor: '#FEF3C7',
-    iconColor: '#D97706',
-  },
-];
+const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+function mapContextToDashboard(t: ContextTransactionItem): DashboardTransactionItem {
+  return {
+    id: t.id,
+    name: t.name,
+    debtorName: t.debtorName,
+    category: t.category,
+    date: t.fullDateText,
+    amount: t.total,
+    type: t.transactionType,
+    quantity: t.quantity,
+    unit: t.unit,
+    paymentMethod: t.paymentMethod,
+    icon: t.transactionType === 'IN' ? 'cart-outline' : 'receipt-outline',
+    bgColor: t.transactionType === 'IN' ? '#DCFCE7' : '#FEE2E2',
+    iconColor: t.transactionType === 'IN' ? '#16A34A' : '#DC2626',
+    timestamp: t.timestamp,
+  };
+}
 
 export default function DashboardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { db } = useDatabase();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
-  
-  const { addTransaction, updateTransaction, deleteTransaction } = useTransactions();
-  const { registerOrRestockExpenseItem, adjustStockByItemName } = useInventory();
+
+  const { transactions: contextTransactions, addTransaction, updateTransaction, markDebtAsPaid, deleteTransaction: contextDeleteTransaction } = useTransactions();
+  const { adjustStockByItemName, registerOrRestockExpenseItem } = useInventory();
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
   const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
-  const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
+
+  const transactions = useMemo(() => contextTransactions.map(mapContextToDashboard), [contextTransactions]);
 
   // Live Real-Time Device Clock & Date
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -157,19 +86,24 @@ export default function DashboardScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const dayNumber = currentDate.getDate();
-  const dayName = currentDate.toLocaleDateString('id-ID', { weekday: 'long' });
-  const monthYearName = currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-  const timeFormatted = currentDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+  const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-  // Modal CRUD State
+  const dayNumber = currentDate.getDate();
+  const dayName = DAYS[currentDate.getDay()];
+  const monthYearName = `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+  
+  const h = String(currentDate.getHours()).padStart(2, '0');
+  const m = String(currentDate.getMinutes()).padStart(2, '0');
+  const timeFormatted = `${h}:${m} WIB`;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderFormData | null>(null);
+
+  const [isDebtPanelOpen, setIsDebtPanelOpen] = useState(false);
 
   const isIncome = activeTab === 'income';
   const themeAccentColor = isIncome ? '#14A39F' : '#FA6B6C';
 
-  // Compute live balances
   const totalIncome = transactions
     .filter((t) => t.type === 'IN')
     .reduce((sum, t) => sum + t.amount, 0);
@@ -178,66 +112,36 @@ export default function DashboardScreen() {
     .filter((t) => t.type === 'OUT')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const totalSaldo = 90000 + (totalIncome - totalExpense);
+  const totalSaldo = totalIncome - totalExpense;
 
-  const filteredTransactions = transactions.filter((t) =>
-    isIncome ? t.type === 'IN' : t.type === 'OUT'
-  );
+  const allFilteredTransactions = transactions
+    .filter((t) => (isIncome ? t.type === 'IN' : t.type === 'OUT'))
+    .sort((a, b) => b.timestamp - a.timestamp);
 
-  const MAX_RECENT_ITEMS = 5;
-  const displayedTransactions = filteredTransactions.slice(0, MAX_RECENT_ITEMS);
+  const filteredTransactions = allFilteredTransactions.slice(0, 10);
+
+  const debtCount = transactions.filter((t) => t.paymentMethod === 'Hutang').length;
 
   const formatNumber = (num: number) => {
     return num.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Load from database if initialized
-  const loadDatabaseData = useCallback(async () => {
-    if (!db) return;
-    try {
-      const service = new TransactionService(db);
-      const dbList = await service.getTransactions(20);
-      if (dbList && dbList.length > 0) {
-        const mapped: TransactionItem[] = dbList.map((t) => ({
-          id: String(t.id),
-          name: t.description || t.category_name || 'Transaksi',
-          category: t.category_name || 'Umum',
-          date: new Date(t.transaction_date).toLocaleDateString('id-ID', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          }),
-          amount: t.nominal,
-          type: t.transaction_type,
-          quantity: t.quantity || 1,
-          unit: 'Pcs',
-          paymentMethod: (t.payment_method === 'Hutang' ? 'Hutang' : 'Lunas') as 'Lunas' | 'Hutang',
-          icon: t.transaction_type === 'IN' ? 'cart-outline' : 'receipt-outline',
-          bgColor: t.transaction_type === 'IN' ? '#DCFCE7' : '#FEE2E2',
-          iconColor: t.transaction_type === 'IN' ? '#16A34A' : '#DC2626',
-        }));
-        setTransactions(mapped);
-      }
-    } catch (e) {
-      console.log('Using in-memory transactions fallback:', e);
-    }
-  }, [db]);
+  const formatRupiah = (num: number) => {
+    return 'Rp ' + num.toLocaleString('id-ID');
+  };
 
-  useEffect(() => {
-    loadDatabaseData();
-  }, [loadDatabaseData]);
 
-  // Open modal in Create mode
+
   const handleOpenAddModal = () => {
     setEditingItem(null);
     setIsModalOpen(true);
   };
 
-  // Open modal in Edit/Delete mode
-  const handleEditItem = (item: TransactionItem) => {
+  const handleEditItem = (item: DashboardTransactionItem) => {
     setEditingItem({
       id: item.id,
       name: item.name,
+      debtorName: item.debtorName,
       category: item.category,
       stock: 25,
       quantity: item.quantity,
@@ -249,132 +153,52 @@ export default function DashboardScreen() {
     setIsModalOpen(true);
   };
 
-  // CREATE or UPDATE CRUD Handler
   const handleSaveOrder = async (formData: OrderFormData) => {
-    const totalAmount = formData.price * formData.quantity;
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-
     if (formData.id) {
-      // UPDATE Operation
-      if (db) {
-        try {
-          const service = new TransactionService(db);
-          await service.updateTransaction(formData.id, {
-            transaction_type: formData.transactionType,
-            nominal: totalAmount,
-            quantity: formData.quantity,
-            unit_price: formData.price,
-            payment_method: formData.paymentMethod,
-            description: formData.name,
-          });
-        } catch (e) {
-          console.log('DB Update error fallback:', e);
-        }
-      }
-
-      // Sync with Central Transaction Context for Rekap
-      updateTransaction(formData.id, formData);
-
-      setTransactions((prev) =>
-        prev.map((t) =>
-          t.id === formData.id
-            ? {
-                ...t,
-                name: formData.name,
-                category: formData.category,
-                amount: totalAmount,
-                quantity: formData.quantity,
-                unit: formData.unit,
-                paymentMethod: formData.paymentMethod,
-                type: formData.transactionType,
-              }
-            : t
-        )
-      );
-
+      await updateTransaction(formData.id, formData);
       Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil diperbarui!`);
     } else {
-      // CREATE Operation
-      const newId = `trx-${Date.now()}`;
-      if (db) {
-        try {
-          const service = new TransactionService(db);
-          await service.createTransaction({
-            transaction_date: now.toISOString().replace('T', ' ').substring(0, 19),
-            transaction_type: formData.transactionType,
-            category_id: formData.transactionType === 'IN' ? 1 : 4,
-            nominal: totalAmount,
-            quantity: formData.quantity,
-            unit_price: formData.price,
-            payment_method: formData.paymentMethod,
-            description: formData.name,
-          });
-        } catch (e) {
-          console.log('DB Insert error fallback:', e);
-        }
-      }
-
-      const newTrx: TransactionItem = {
-        id: newId,
-        name: formData.name,
-        category: formData.category,
-        date: dateStr,
-        amount: totalAmount,
-        type: formData.transactionType,
-        quantity: formData.quantity,
-        unit: formData.unit,
-        paymentMethod: formData.paymentMethod,
-        icon: formData.transactionType === 'IN' ? 'cafe-outline' : 'restaurant-outline',
-        bgColor: formData.transactionType === 'IN' ? '#FFEDD5' : '#FEF3C7',
-        iconColor: formData.transactionType === 'IN' ? '#EA580C' : '#D97706',
-      };
-
-      // Add to Central Transaction Context for Rekap sync
-      addTransaction(formData);
-
-      // Sync with Inventory (auto register / restock expense items or deduct sold items)
-      if (formData.transactionType === 'OUT') {
-        registerOrRestockExpenseItem({
+      await addTransaction(formData);
+      
+      // Update inventory stock
+      if (formData.transactionType === 'IN') {
+        await adjustStockByItemName(formData.name, -formData.quantity);
+      } else {
+        await registerOrRestockExpenseItem({
           name: formData.name,
           category: formData.category,
           quantity: formData.quantity,
           unit: formData.unit,
           price: formData.price,
         });
-      } else {
-        adjustStockByItemName(formData.name, -formData.quantity);
       }
 
-      setTransactions((prev) => [newTrx, ...prev]);
-      Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil dicatat dan masuk ke Rekap!`);
+      Alert.alert('Sukses', `Pesanan "${formData.name}" berhasil dicatat!`);
     }
 
     setIsModalOpen(false);
   };
 
-  // DELETE CRUD Handler
   const handleDeleteOrder = async (id: string) => {
-    if (db) {
-      try {
-        const service = new TransactionService(db);
-        await service.deleteTransaction(id);
-      } catch (e) {
-        console.log('DB Delete error fallback:', e);
-      }
-    }
-
-    // Sync deletion with Central Transaction Context
-    deleteTransaction(id);
-
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    await contextDeleteTransaction(id);
     setIsModalOpen(false);
     Alert.alert('Terhapus', 'Pesanan telah berhasil dihapus.');
   };
+
+  const handleMarkLocalDebtPaid = async (id: string) => {
+    await markDebtAsPaid(id);
+    Alert.alert('Lunas!', 'Hutang telah ditandai lunas.');
+  };
+
+  const allDebts = transactions
+    .filter((t) => t.paymentMethod === 'Hutang')
+    .map((t) => ({
+      id: t.id,
+      debtorName: t.debtorName,
+      itemName: t.name,
+      amount: t.amount,
+      date: t.date,
+    }));
 
   return (
     <View style={styles.container}>
@@ -384,25 +208,33 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + bottomInset }]}
       >
-        {/* Top Header Section (Teal Card) */}
+        {/* Top Header Section */}
         <View style={styles.headerContainer}>
           <SafeAreaView style={styles.headerSafeArea}>
-            {/* Top Bar: Greeting & Notification */}
             <View style={styles.topBar}>
               <View>
-                <Text style={styles.greetingText}>Halo, Syahrul!</Text>
+                <Text style={styles.greetingText}>Halo, Admin!</Text>
                 <Text style={styles.liveClockSubText}>
                   {dayName}, {dayNumber} {monthYearName} • {timeFormatted}
                 </Text>
               </View>
 
-              <TouchableOpacity style={styles.notificationButton} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.notificationButton}
+                activeOpacity={0.8}
+                onPress={() => setIsDebtPanelOpen(true)}
+              >
                 <Ionicons name="notifications" size={24} color="#FFFFFF" />
-                <View style={styles.notificationBadge} />
+                {allDebts.length > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {allDebts.length > 9 ? '9+' : allDebts.length}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
 
-            {/* Balance Display */}
             <View style={styles.balanceContainer}>
               <Text style={styles.balanceAmount}>Rp {formatNumber(totalSaldo)}</Text>
               <Text style={styles.balanceLabel}>Total saldo Anda</Text>
@@ -410,7 +242,7 @@ export default function DashboardScreen() {
           </SafeAreaView>
         </View>
 
-        {/* Floating Income / Expense Toggle Card */}
+        {/* Toggle Card */}
         <View style={styles.toggleCardContainer}>
           <View style={styles.toggleCard}>
             <TouchableOpacity
@@ -451,16 +283,14 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Main Body Content */}
+        {/* Body Content */}
         <View style={styles.bodyContent}>
-          {/* Income / Expense Graphic Card (Red for Expense, Teal for Income) */}
           <View
             style={[
               styles.graphicCardOuter,
               { backgroundColor: isIncome ? '#14A39F' : '#FA6B6C' },
             ]}
           >
-            {/* Inner White Card */}
             <TouchableOpacity
               activeOpacity={0.88}
               style={styles.graphicCardInner}
@@ -472,22 +302,15 @@ export default function DashboardScreen() {
                 }
               }}
             >
-              {/* Left Content Row */}
               <View style={styles.graphicCardLeftContent}>
-                {/* Blue Left Vertical Bar Pill */}
                 <View style={styles.bluePillIndicator} />
-
-                {/* Date Day Number */}
                 <Text style={styles.dateNumberText}>{dayNumber}</Text>
-
-                {/* Day Name & Month Year Column */}
                 <View style={styles.dateTextColumn}>
                   <Text style={styles.dayNameText}>{dayName}</Text>
                   <Text style={styles.monthYearText}>{monthYearName}</Text>
                 </View>
               </View>
 
-              {/* Right Background Watermark Silhouette */}
               <View style={styles.watermarkContainer} pointerEvents="none">
                 <Image
                   source={{ uri: WATERMARK_SVG_URI }}
@@ -496,130 +319,106 @@ export default function DashboardScreen() {
                 />
               </View>
 
-              {/* Right Chevron Forward Icon */}
               <Ionicons name="chevron-forward" size={24} color="#94A3B8" style={styles.chevronRightIcon} />
             </TouchableOpacity>
           </View>
 
-          {/* Recent Transactions Section */}
+          {/* Recent Transactions */}
           <View style={styles.recentSection}>
-            <View style={styles.recentSectionHeaderRow}>
-              <Text style={styles.recentSectionTitle}>
-                {isIncome ? 'Pemasukan terbaru Anda' : 'Pengeluaran terbaru Anda'}
-              </Text>
-              {filteredTransactions.length > 0 && (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    if (isIncome) {
-                      router.push('/rekap-pemasukan');
-                    } else {
-                      router.push('/rekap-pengeluaran');
-                    }
-                  }}
-                >
-                  <Text style={[styles.recentViewAllLink, { color: themeAccentColor }]}>
-                    Rekap ({filteredTransactions.length}) ➔
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <Text style={styles.recentSectionTitle}>
+              {isIncome ? 'Pemasukan terbaru Anda' : 'Pengeluaran terbaru Anda'}
+            </Text>
 
             <View style={styles.transactionCard}>
-              {displayedTransactions.length === 0 ? (
+              {filteredTransactions.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="document-text-outline" size={32} color="#94A3B8" />
                   <Text style={styles.emptyText}>Belum ada data {isIncome ? 'pemasukan' : 'pengeluaran'}</Text>
                 </View>
               ) : (
-                <>
-                  {displayedTransactions.map((item, index) => (
-                    <React.Fragment key={item.id}>
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        style={styles.transactionItem}
-                        onPress={() => handleEditItem(item)}
-                      >
-                        <View style={styles.transactionLeft}>
-                          <View style={[styles.avatarCircle, { backgroundColor: item.bgColor }]}>
-                            <Ionicons name={item.icon as any} size={22} color={item.iconColor} />
-                            {item.paymentMethod === 'Hutang' ? (
-                              <View style={[styles.arrowBadge, { backgroundColor: '#EAB308' }]}>
-                                <Ionicons name="time" size={10} color="#FFFFFF" />
-                              </View>
-                            ) : (
-                              <View style={[styles.arrowBadge, { backgroundColor: themeAccentColor }]}>
-                                <Ionicons
-                                  name="arrow-up"
-                                  size={10}
-                                  color="#FFFFFF"
-                                  style={!isIncome ? { transform: [{ rotate: '45deg' }] } : undefined}
-                                />
-                              </View>
-                            )}
-                          </View>
-                          <View style={styles.transactionMeta}>
-                            <Text style={styles.transactionName}>{item.name}</Text>
-                            <Text style={styles.transactionDate}>{item.date}</Text>
-                          </View>
-                        </View>
-
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text
-                            style={[
-                              styles.transactionAmount,
-                              item.paymentMethod === 'Hutang' && styles.hutangAmountText,
-                            ]}
-                          >
-                            Rp {formatNumber(item.amount)}
-                          </Text>
+                filteredTransactions.map((item, index) => (
+                  <React.Fragment key={item.id ? String(item.id) : `fallback-${index}`}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      style={styles.transactionItem}
+                      onPress={() => handleEditItem(item)}
+                    >
+                      <View style={styles.transactionLeft}>
+                        <View style={[styles.avatarCircle, { backgroundColor: item.bgColor }]}>
+                          <Ionicons name={item.icon as any} size={22} color={item.iconColor} />
                           {item.paymentMethod === 'Hutang' ? (
-                            <View style={styles.hutangBadge}>
-                              <Ionicons name="time" size={10} color="#B45309" style={{ marginRight: 3 }} />
-                              <Text style={styles.hutangBadgeText}>Hutang</Text>
+                            <View style={[styles.arrowBadge, { backgroundColor: '#EAB308' }]}>
+                              <Ionicons name="time" size={10} color="#FFFFFF" />
                             </View>
                           ) : (
-                            <View style={styles.lunasBadge}>
-                              <Ionicons name="checkmark-circle" size={10} color="#15803D" style={{ marginRight: 3 }} />
-                              <Text style={styles.lunasBadgeText}>Lunas</Text>
+                            <View style={[styles.arrowBadge, { backgroundColor: themeAccentColor }]}>
+                              <Ionicons
+                                name="arrow-up"
+                                size={10}
+                                color="#FFFFFF"
+                                style={!isIncome ? { transform: [{ rotate: '45deg' }] } : undefined}
+                              />
                             </View>
                           )}
                         </View>
-                      </TouchableOpacity>
+                        <View style={styles.transactionMeta}>
+                          <Text style={styles.transactionName}>{item.name}</Text>
+                          <Text style={styles.transactionDate}>
+                            {item.debtorName && item.debtorName !== 'Admin' ? `${item.debtorName} • ` : ''}{item.date}
+                          </Text>
+                        </View>
+                      </View>
 
-                      {index < displayedTransactions.length - 1 && <View style={styles.divider} />}
-                    </React.Fragment>
-                  ))}
-
-                  {/* View All Button if more than MAX_RECENT_ITEMS */}
-                  {filteredTransactions.length > MAX_RECENT_ITEMS && (
-                    <>
-                      <View style={styles.divider} />
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        style={styles.viewMoreButton}
-                        onPress={() => {
-                          if (isIncome) {
-                            router.push('/rekap-pemasukan');
-                          } else {
-                            router.push('/rekap-pengeluaran');
-                          }
-                        }}
-                      >
-                        <Text style={[styles.viewMoreText, { color: themeAccentColor }]}>
-                          Lihat Semua ({filteredTransactions.length} {isIncome ? 'Pemasukan' : 'Pengeluaran'}) ➔
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text
+                          style={[
+                            styles.transactionAmount,
+                            item.paymentMethod === 'Hutang' && styles.hutangAmountText,
+                          ]}
+                        >
+                          Rp {formatNumber(item.amount)}
                         </Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </>
+                        {item.paymentMethod === 'Hutang' ? (
+                          <View style={styles.hutangBadge}>
+                            <Ionicons name="time" size={10} color="#B45309" style={{ marginRight: 3 }} />
+                            <Text style={styles.hutangBadgeText}>Hutang</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.lunasBadge}>
+                            <Ionicons name="checkmark-circle" size={10} color="#15803D" style={{ marginRight: 3 }} />
+                            <Text style={styles.lunasBadgeText}>Lunas</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    {index < filteredTransactions.length - 1 && <View style={styles.divider} />}
+                  </React.Fragment>
+                ))
               )}
             </View>
+
+            {allFilteredTransactions.length > 10 && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.seeMoreBtn}
+                onPress={() => {
+                  if (isIncome) {
+                    router.push('/rekap-pemasukan');
+                  } else {
+                    router.push('/rekap-pengeluaran');
+                  }
+                }}
+              >
+                <Text style={styles.seeMoreBtnText}>Lihat Semua Transaksi</Text>
+                <Ionicons name="arrow-forward" size={16} color="#14A39F" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </ScrollView>
 
-      {/* Floating Action Button (+) */}
+      {/* FAB */}
       <TouchableOpacity
         activeOpacity={0.85}
         style={[
@@ -635,7 +434,7 @@ export default function DashboardScreen() {
         <Ionicons name="add" size={32} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* Order CRUD Form Modal matching exact user requirement & design */}
+      {/* Order Modal */}
       <OrderModal
         visible={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -645,7 +444,112 @@ export default function DashboardScreen() {
         defaultType={isIncome ? 'IN' : 'OUT'}
       />
 
-      {/* Bottom Navigation Bar */}
+      {/* DEBT NOTIFICATION PANEL MODAL */}
+      <Modal
+        visible={isDebtPanelOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsDebtPanelOpen(false)}
+      >
+        <View style={styles.debtModalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setIsDebtPanelOpen(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+
+          <View style={styles.debtModalContainer}>
+            {/* Header */}
+            <View style={styles.debtHeaderRow}>
+              <View style={styles.debtHeaderLeft}>
+                <View style={styles.debtHeaderIconBadge}>
+                  <Ionicons name="notifications-outline" size={22} color="#D97706" />
+                </View>
+                <View>
+                  <Text style={styles.debtHeaderTitle}>Daftar Hutang</Text>
+                  <Text style={styles.debtHeaderSub}>
+                    {allDebts.length} hutang belum lunas
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.debtCloseBtn}
+                onPress={() => setIsDebtPanelOpen(false)}
+              >
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.debtDivider} />
+
+            {/* Debt List */}
+            <ScrollView
+              style={{ maxHeight: 400 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {allDebts.length === 0 ? (
+                <View style={styles.debtEmptyContainer}>
+                  <Ionicons name="checkmark-circle-outline" size={48} color="#16A34A" />
+                  <Text style={styles.debtEmptyTitle}>Tidak Ada Hutang</Text>
+                  <Text style={styles.debtEmptySub}>
+                    Semua transaksi telah lunas. Bagus!
+                  </Text>
+                </View>
+              ) : (
+                allDebts.map((debt, idx) => (
+                  <View key={`${debt.id || 'unknown'}-${idx}`} style={styles.debtItemCard}>
+                    <View style={styles.debtItemLeft}>
+                      <View style={styles.debtAvatarCircle}>
+                        <Ionicons name="person" size={18} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.debtCustomerName}>{debt.debtorName}</Text>
+                        <Text style={styles.debtItemName}>{debt.itemName}</Text>
+                        <Text style={styles.debtDate}>{debt.date}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.debtItemRight}>
+                      <Text style={styles.debtAmount}>{formatRupiah(debt.amount)}</Text>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        style={styles.markPaidBtn}
+                        onPress={() => {
+                          Alert.alert(
+                            'Tandai Lunas',
+                            `Tandai hutang "${debt.debtorName}" untuk "${debt.itemName}" sebagai lunas?`,
+                            [
+                              { text: 'Batal', style: 'cancel' },
+                              {
+                                text: 'Ya, Lunas',
+                                onPress: () => {
+                                  handleMarkLocalDebtPaid(debt.id);
+                                },
+                              },
+                            ]
+                          );
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.markPaidBtnText}>Tandai Lunas</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {allDebts.length > 0 && (
+              <View style={styles.debtTotalRow}>
+                <Text style={styles.debtTotalLabel}>Total Hutang</Text>
+                <Text style={styles.debtTotalValue}>
+                  {formatRupiah(allDebts.reduce((sum, d) => sum + d.amount, 0))}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bottom Nav */}
       <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
         <TouchableOpacity
           activeOpacity={0.7}
@@ -668,7 +572,7 @@ export default function DashboardScreen() {
           }}
         >
           <Ionicons
-            name={activeNav === 'chart' ? 'receipt' : 'receipt-outline'}
+            name={activeNav === 'chart' ? 'book' : 'book-outline'}
             size={24}
             color={activeNav === 'chart' ? '#14A39F' : '#94A3B8'}
           />
@@ -683,7 +587,7 @@ export default function DashboardScreen() {
           }}
         >
           <Ionicons
-            name={activeNav === 'wallet' ? 'card' : 'card-outline'}
+            name={activeNav === 'wallet' ? 'cube' : 'cube-outline'}
             size={26}
             color={activeNav === 'wallet' ? '#14A39F' : '#94A3B8'}
           />
@@ -734,14 +638,22 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#EF4444',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#14A39F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  notificationBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   balanceContainer: {
     alignItems: 'center',
@@ -881,29 +793,11 @@ const styles = StyleSheet.create({
   recentSection: {
     marginBottom: 20,
   },
-  recentSectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
   recentSectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#1E293B',
-  },
-  recentViewAllLink: {
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: '700',
-  },
-  viewMoreButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewMoreText: {
-    fontSize: 13,
-    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 14,
   },
   transactionCard: {
     backgroundColor: '#FFFFFF',
@@ -935,6 +829,7 @@ const styles = StyleSheet.create({
   transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   avatarCircle: {
     width: 44,
@@ -959,6 +854,7 @@ const styles = StyleSheet.create({
   },
   transactionMeta: {
     justifyContent: 'center',
+    flex: 1,
   },
   transactionName: {
     fontSize: 15,
@@ -1049,5 +945,189 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 8,
+  },
+
+  debtModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  debtModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  debtHandleBar: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  debtHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  debtHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  debtHeaderIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  debtHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  debtHeaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  debtCloseBtn: {
+    padding: 4,
+  },
+  debtDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 14,
+  },
+  debtEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  debtEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#16A34A',
+    marginTop: 12,
+  },
+  debtEmptySub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 4,
+  },
+  debtItemCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  debtItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  debtAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  debtCustomerName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  debtItemName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78716C',
+    marginTop: 1,
+  },
+  debtDate: {
+    fontSize: 10,
+    color: '#A8A29E',
+    marginTop: 2,
+  },
+  debtItemRight: {
+    alignItems: 'flex-end',
+    marginLeft: 10,
+  },
+  debtAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D97706',
+    marginBottom: 6,
+  },
+  markPaidBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  markPaidBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  debtTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  debtTotalLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  debtTotalValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  seeMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  seeMoreBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#14A39F',
+    marginRight: 6,
   },
 });
