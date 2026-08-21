@@ -320,34 +320,7 @@ export default function StatisticsScreen() {
             <Text style={styles.metricValueAmber}>{formatRupiah(metrics.unpaidTotal)}</Text>
           </View>
 
-          {/* Card 2: Piutang Pelanggan vs Hutang Toko Row */}
-          <View style={styles.subMetricsRow}>
-            {/* Piutang Pelanggan (IN) */}
-            <View style={[styles.metricCardSub, { flex: 1, marginRight: 8 }]}>
-              <View style={styles.metricCardHeaderMini}>
-                <View style={[styles.iconCircleMini, { backgroundColor: '#F0FDFA' }]}>
-                  <Ionicons name="arrow-down-circle" size={14} color="#14A39F" />
-                </View>
-                <Text style={styles.metricSubTag}>Piutang (IN)</Text>
-              </View>
-              <Text style={styles.metricValueMini}>{formatRupiah(metrics.customerReceivableTotal)}</Text>
-              <Text style={styles.metricSubHint}>Pemasukan kasbon</Text>
-            </View>
 
-            {/* Hutang Toko (OUT) */}
-            <View style={[styles.metricCardSub, { flex: 1 }]}>
-              <View style={styles.metricCardHeaderMini}>
-                <View style={[styles.iconCircleMini, { backgroundColor: '#FEF2F2' }]}>
-                  <Ionicons name="arrow-up-circle" size={14} color="#DC2626" />
-                </View>
-                <Text style={styles.metricSubTag}>Hutang (OUT)</Text>
-              </View>
-              <Text style={[styles.metricValueMini, { color: '#DC2626' }]}>
-                {formatRupiah(metrics.supplierDebtTotal)}
-              </Text>
-              <Text style={styles.metricSubHint}>Kewajiban toko</Text>
-            </View>
-          </View>
         </View>
 
         {/* Live Search Bar */}
@@ -425,35 +398,6 @@ export default function StatisticsScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.filterChip, activeFilter === 'INCOME_DEBT' && styles.filterChipActive]}
-            onPress={() => setActiveFilter('INCOME_DEBT')}
-          >
-            <Text
-              style={[
-                styles.filterChipText,
-                activeFilter === 'INCOME_DEBT' && styles.filterChipTextActive,
-              ]}
-            >
-              Piutang Pelanggan (IN)
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.filterChip, activeFilter === 'EXPENSE_DEBT' && styles.filterChipActive]}
-            onPress={() => setActiveFilter('EXPENSE_DEBT')}
-          >
-            <Text
-              style={[
-                styles.filterChipText,
-                activeFilter === 'EXPENSE_DEBT' && styles.filterChipTextActive,
-              ]}
-            >
-              Hutang Toko (OUT)
-            </Text>
-          </TouchableOpacity>
         </ScrollView>
 
         {/* Section Header */}
@@ -510,16 +454,6 @@ export default function StatisticsScreen() {
                           <Text style={styles.trxCountBadgeText}>{grp.items.length} Transaksi</Text>
                         </View>
 
-                        {grp.hasIncomeDebt && (
-                          <View style={[styles.typeTagMini, { backgroundColor: '#F0FDFA' }]}>
-                            <Text style={[styles.typeTagMiniText, { color: '#0D9488' }]}>Piutang</Text>
-                          </View>
-                        )}
-                        {grp.hasExpenseDebt && (
-                          <View style={[styles.typeTagMini, { backgroundColor: '#FEF2F2' }]}>
-                            <Text style={[styles.typeTagMiniText, { color: '#DC2626' }]}>Hutang Toko</Text>
-                          </View>
-                        )}
                       </View>
                     </View>
 
@@ -600,27 +534,7 @@ export default function StatisticsScreen() {
                           <View style={{ flex: 1, marginRight: 10 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
                               <Text style={styles.subItemName}>{item.name}</Text>
-                              <View
-                                style={[
-                                  styles.subItemTypePill,
-                                  {
-                                    backgroundColor:
-                                      item.transactionType === 'IN' ? '#F0FDFA' : '#FEF2F2',
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.subItemTypePillText,
-                                    {
-                                      color:
-                                        item.transactionType === 'IN' ? '#0D9488' : '#DC2626',
-                                    },
-                                  ]}
-                                >
-                                  {item.transactionType === 'IN' ? 'Piutang' : 'Hutang Belanja'}
-                                </Text>
-                              </View>
+
                             </View>
 
                             <Text style={styles.subItemQtyPrice}>

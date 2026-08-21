@@ -102,10 +102,15 @@ export default function RekapPemasukanScreen() {
       const parts = dStr.split('-');
       if (parts.length === 3) {
         const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-        const dayName = dObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
+        const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+        const MONTHS_LONG = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+        const dayName = `${DAYS[dObj.getDay()]}, ${dObj.getDate()} ${MONTHS_SHORT[dObj.getMonth()]}`;
+
         options.push({
           id: dStr,
-          label: dObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+          label: `${DAYS[dObj.getDay()]}, ${dObj.getDate()} ${MONTHS_LONG[dObj.getMonth()]} ${dObj.getFullYear()}`,
           shortLabel: dayName,
         });
       }
@@ -260,9 +265,8 @@ export default function RekapPemasukanScreen() {
       </View>
 
       {/* Main Content Area */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + bottomInset }]}
+      <View
+        style={[styles.scrollContent, { flex: 1, paddingBottom: 40 + bottomInset }]}
       >
         {/* ========================================================
             CASCADING MULTI-DROPDOWN FILTER BAR (Bulan -> Minggu -> Hari)
@@ -349,7 +353,7 @@ export default function RekapPemasukanScreen() {
               <Text style={styles.tableCardTitle}>Tabel Rekapitulasi Pemasukan</Text>
             </View>
             <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{filteredTransactions.length} Baris</Text>
+              <Text style={styles.countBadgeText}>{filteredTransactions.length} Transaksi</Text>
             </View>
           </View>
 
@@ -371,6 +375,7 @@ export default function RekapPemasukanScreen() {
                 </View>
 
                 {/* Table Body Rows */}
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
                 {filteredTransactions.map((item, index) => {
                   const isEven = index % 2 === 0;
                   return (
@@ -456,6 +461,8 @@ export default function RekapPemasukanScreen() {
                   );
                 })}
 
+                </ScrollView>
+
                 {/* Table Summary Footer Row */}
                 <View style={styles.tableFooterRow}>
                   <View style={{ width: 474, paddingLeft: 12 }}>
@@ -502,17 +509,7 @@ export default function RekapPemasukanScreen() {
             </View>
           )}
         </View>
-
-        {/* Quick Floating Add Bar */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.bottomFloatingBtn}
-          onPress={() => setOrderModalVisible(true)}
-        >
-          <Ionicons name="add-circle" size={22} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.bottomFloatingBtnText}>+ Tambah Transaksi Pemasukan</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      </View>
 
       {/* ========================================================
           DROPDOWN SELECTION MODAL (Bulan / Minggu / Hari)
@@ -852,6 +849,7 @@ const styles = StyleSheet.create({
   },
   /* TABLE CARD CONTAINER */
   tableCardContainer: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
@@ -891,9 +889,10 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   horizontalScroll: {
-    flexGrow: 0,
+    flex: 1,
   },
   tableStructure: {
+    flex: 1,
     minWidth: 840,
   },
   tableHeaderRow: {

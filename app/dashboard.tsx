@@ -40,6 +40,7 @@ interface TransactionItem {
   icon: string;
   bgColor: string;
   iconColor: string;
+  timestamp: number;
 }
 
 const INITIAL_TRANSACTIONS: TransactionItem[] = [
@@ -57,6 +58,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     icon: 'cafe-outline',
     bgColor: '#FFEDD5',
     iconColor: '#EA580C',
+    timestamp: new Date('2020-10-04T00:00:00').getTime(),
   },
   {
     id: 'trx-2',
@@ -72,6 +74,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     icon: 'settings-outline',
     bgColor: '#E2E8F0',
     iconColor: '#475569',
+    timestamp: new Date('2020-10-04T01:00:00').getTime(),
   },
   {
     id: 'trx-3',
@@ -87,6 +90,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     icon: 'color-palette-outline',
     bgColor: '#FEF08A',
     iconColor: '#CA8A04',
+    timestamp: new Date('2020-10-04T02:00:00').getTime(),
   },
   {
     id: 'trx-4',
@@ -98,10 +102,11 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     type: 'OUT',
     quantity: 1,
     unit: 'Bulan',
-    paymentMethod: 'Hutang',
+    paymentMethod: 'Lunas',
     icon: 'home-outline',
     bgColor: '#DBEAFE',
     iconColor: '#2563EB',
+    timestamp: new Date('2020-10-04T03:00:00').getTime(),
   },
   {
     id: 'trx-5',
@@ -117,6 +122,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     icon: 'tv-outline',
     bgColor: '#FEE2E2',
     iconColor: '#DC2626',
+    timestamp: new Date('2020-10-04T04:00:00').getTime(),
   },
   {
     id: 'trx-6',
@@ -132,6 +138,7 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     icon: 'restaurant-outline',
     bgColor: '#FEF3C7',
     iconColor: '#D97706',
+    timestamp: new Date('2020-10-04T05:00:00').getTime(),
   },
 ];
 
@@ -157,10 +164,16 @@ export default function DashboardScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
   const dayNumber = currentDate.getDate();
-  const dayName = currentDate.toLocaleDateString('id-ID', { weekday: 'long' });
-  const monthYearName = currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-  const timeFormatted = currentDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+  const dayName = DAYS[currentDate.getDay()];
+  const monthYearName = `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+  
+  const h = String(currentDate.getHours()).padStart(2, '0');
+  const m = String(currentDate.getMinutes()).padStart(2, '0');
+  const timeFormatted = `${h}:${m} WIB`;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderFormData | null>(null);
@@ -180,9 +193,11 @@ export default function DashboardScreen() {
 
   const totalSaldo = 90000 + (totalIncome - totalExpense);
 
-  const filteredTransactions = transactions.filter((t) =>
-    isIncome ? t.type === 'IN' : t.type === 'OUT'
-  );
+  const allFilteredTransactions = transactions
+    .filter((t) => (isIncome ? t.type === 'IN' : t.type === 'OUT'))
+    .sort((a, b) => b.timestamp - a.timestamp);
+
+  const filteredTransactions = allFilteredTransactions.slice(0, 10);
 
   const debtTransactions = getDebtTransactions();
   const debtCount = debtTransactions.length + transactions.filter((t) => t.paymentMethod === 'Hutang').length;
@@ -206,11 +221,10 @@ export default function DashboardScreen() {
           name: t.description || t.category_name || 'Transaksi',
           debtorName: t.customer_name || 'Admin',
           category: t.category_name || 'Umum',
-          date: new Date(t.transaction_date).toLocaleDateString('id-ID', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          }),
+          date: (() => {
+            const d = new Date(t.transaction_date);
+            return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+          })(),
           amount: t.nominal,
           type: t.transaction_type,
           quantity: t.quantity || 1,
@@ -219,6 +233,7 @@ export default function DashboardScreen() {
           icon: t.transaction_type === 'IN' ? 'cart-outline' : 'receipt-outline',
           bgColor: t.transaction_type === 'IN' ? '#DCFCE7' : '#FEE2E2',
           iconColor: t.transaction_type === 'IN' ? '#16A34A' : '#DC2626',
+          timestamp: new Date(t.transaction_date).getTime(),
         }));
         setTransactions(mapped);
       }
@@ -255,11 +270,7 @@ export default function DashboardScreen() {
   const handleSaveOrder = async (formData: OrderFormData) => {
     const totalAmount = formData.price * formData.quantity;
     const now = new Date();
-    const dateStr = now.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    const dateStr = `${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
 
     if (formData.id) {
       if (db) {
@@ -333,6 +344,7 @@ export default function DashboardScreen() {
         icon: formData.transactionType === 'IN' ? 'cafe-outline' : 'restaurant-outline',
         bgColor: formData.transactionType === 'IN' ? '#FFEDD5' : '#FEF3C7',
         iconColor: formData.transactionType === 'IN' ? '#EA580C' : '#D97706',
+        timestamp: now.getTime(),
       };
 
       addTransaction(formData, 'day-sat');
@@ -504,10 +516,10 @@ export default function DashboardScreen() {
             >
               <View style={styles.graphicCardLeftContent}>
                 <View style={styles.bluePillIndicator} />
-                <Text style={styles.dateNumberText}>13</Text>
+                <Text style={styles.dateNumberText}>{dayNumber}</Text>
                 <View style={styles.dateTextColumn}>
-                  <Text style={styles.dayNameText}>Kamis</Text>
-                  <Text style={styles.monthYearText}>Agustus 2026</Text>
+                  <Text style={styles.dayNameText}>{dayName}</Text>
+                  <Text style={styles.monthYearText}>{monthYearName}</Text>
                 </View>
               </View>
 
@@ -597,6 +609,23 @@ export default function DashboardScreen() {
                 ))
               )}
             </View>
+
+            {allFilteredTransactions.length > 10 && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                style={styles.seeMoreBtn}
+                onPress={() => {
+                  if (isIncome) {
+                    router.push('/rekap-pemasukan');
+                  } else {
+                    router.push('/rekap-pengeluaran');
+                  }
+                }}
+              >
+                <Text style={styles.seeMoreBtnText}>Lihat Semua Transaksi</Text>
+                <Ionicons name="arrow-forward" size={16} color="#14A39F" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -640,8 +669,6 @@ export default function DashboardScreen() {
           </TouchableWithoutFeedback>
 
           <View style={styles.debtModalContainer}>
-            <View style={styles.debtHandleBar} />
-
             {/* Header */}
             <View style={styles.debtHeaderRow}>
               <View style={styles.debtHeaderLeft}>
@@ -707,9 +734,6 @@ export default function DashboardScreen() {
                                 text: 'Ya, Lunas',
                                 onPress: () => {
                                   handleMarkLocalDebtPaid(debt.id);
-                                  if (debt.source === 'context') {
-                                    markDebtAsPaid(debt.id);
-                                  }
                                 },
                               },
                             ]
@@ -1138,15 +1162,16 @@ const styles = StyleSheet.create({
   debtModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   debtModalContainer: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
+    borderRadius: 24,
+    paddingTop: 24,
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingBottom: 24,
+    width: '90%',
     maxHeight: '80%',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: -4 },
@@ -1299,5 +1324,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#D97706',
+  },
+  seeMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  seeMoreBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#14A39F',
+    marginRight: 6,
   },
 });

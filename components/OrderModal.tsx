@@ -1,22 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { InventoryItem, useInventory } from '@/context/InventoryContext';
+import { useTransactions } from '@/context/TransactionContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
-  View,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
   TouchableWithoutFeedback,
-  Keyboard,
-  Pressable,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useInventory, InventoryItem } from '@/context/InventoryContext';
 
 export interface OrderFormData {
   id?: string;
@@ -42,17 +43,11 @@ export interface OrderModalProps {
 }
 
 const CATEGORY_SUGGESTIONS = [
-  'Bahan Baku',
   'Makanan',
   'Minuman',
-  'Kemasan',
-  'Elektronik',
-  'Aksesoris',
-  'ATK',
-  'Operasional',
 ];
 
-const UNIT_OPTIONS = ['Pcs', 'Cup', 'Kg', 'Pack', 'Karton', 'Box', 'Porsi', 'Unit', 'Rim'];
+const UNIT_OPTIONS = ['Pcs'];
 
 export default function OrderModal({
   visible,
@@ -64,11 +59,14 @@ export default function OrderModal({
 }: OrderModalProps) {
   const router = useRouter();
   const { inventoryItems, adjustStockByItemName, registerOrRestockExpenseItem } = useInventory();
+  const { transactions } = useTransactions();
   const isEditing = !!initialData?.id;
+
+  const nameHistory = Array.from(new Set(transactions.map((t) => t.debtorName).filter((n) => n && n !== 'Admin')));
 
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Bahan Baku');
+  const [category, setCategory] = useState('Makanan');
   const [stock, setStock] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState('Pcs');
@@ -103,7 +101,7 @@ export default function OrderModal({
       setPickerSearchQuery('');
       if (initialData) {
         setName(initialData.name || '');
-        setCategory(initialData.category || 'Bahan Baku');
+        setCategory(initialData.category || 'Makanan');
         setStock(initialData.stock ?? 0);
         setQuantity(initialData.quantity || 1);
         setUnit(initialData.unit || 'Pcs');
@@ -120,7 +118,7 @@ export default function OrderModal({
         if (matched) setSelectedInventoryItem(matched);
       } else {
         setName('');
-        setCategory('Bahan Baku');
+        setCategory('Makanan');
         setStock(0);
         setQuantity(1);
         setUnit('Pcs');
@@ -150,8 +148,9 @@ export default function OrderModal({
     setCategory(item.category);
     setStock(item.stock);
     setUnit(item.unit);
-    setPrice(item.price);
-    setPriceInput(item.price ? String(item.price) : '0');
+    const itemPrice = transactionType === 'IN' ? (item.sellingPrice || item.price) : item.price;
+    setPrice(itemPrice);
+    setPriceInput(itemPrice ? String(itemPrice) : '0');
     setShowSearchDropdown(false);
     setPickerSearchQuery('');
   };
@@ -206,10 +205,8 @@ export default function OrderModal({
 
     if (paymentMethod === 'Hutang' && !debtorName.trim()) {
       Alert.alert(
-        'Nama Penghutang Wajib Diisi',
-        transactionType === 'IN'
-          ? 'Silakan masukkan nama pelanggan yang berhutang.'
-          : 'Silakan masukkan nama pihak / supplier terkait.'
+        'Nama Santri Wajib Diisi',
+        'Silakan masukkan nama santri yang berhutang.'
       );
       return;
     }
@@ -224,9 +221,9 @@ export default function OrderModal({
       // Automatically register new item in inventory or restock existing item!
       registerOrRestockExpenseItem({
         name: name.trim(),
-        category: category.trim() || 'Bahan Baku',
+        category: category.trim() || 'Makanan',
         quantity,
-        unit: unit.trim() || 'Pcs',
+        unit,
         price: parsedPrice,
       });
     }
@@ -234,10 +231,10 @@ export default function OrderModal({
     onSave({
       id: initialData?.id,
       name: name.trim(),
-      category: category.trim() || 'Bahan Baku',
+      category: category.trim() || 'Makanan',
       stock,
       quantity,
-      unit: unit.trim() || 'Pcs',
+      unit,
       price: parsedPrice,
       paymentMethod,
       transactionType,
@@ -290,8 +287,6 @@ export default function OrderModal({
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.modalContainer}>
-              {/* Sheet Drag Indicator Handle */}
-              <View style={styles.handleBar} />
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
@@ -304,13 +299,8 @@ export default function OrderModal({
                     {isEditing
                       ? 'Edit Transaksi'
                       : transactionType === 'OUT'
-                      ? 'Tambah Pengeluaran (Belanja Barang)'
-                      : 'Tambah Pemasukan (Penjualan)'}
-                  </Text>
-                  <Text style={styles.subtitle}>
-                    {transactionType === 'OUT'
-                      ? 'Input pengeluaran barang akan otomatis mendaftarkan stok ke Inventori'
-                      : 'Pilih barang terdaftar dari Inventori (Gunakan fitur cari di bawah)'}
+                      ? 'Tambah Pengeluaran'
+                      : 'Tambah Pemasukan'}
                   </Text>
                 </View>
 
@@ -325,7 +315,7 @@ export default function OrderModal({
                     onPress={() => {
                       setTransactionType('IN');
                       if (category === 'Operasional') {
-                        setCategory('Bahan Baku');
+                        setCategory('Makanan');
                       }
                     }}
                   >
@@ -370,114 +360,119 @@ export default function OrderModal({
                   </TouchableOpacity>
                 </View>
 
+                {/* DYNAMIC FIELD: NAMA PEMBELI / SANTRI */}
+                {transactionType === 'IN' && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>
+                      Nama Santri <Text style={styles.requiredStar}>*</Text>
+                    </Text>
+                    <View style={styles.debtorInputBox}>
+                      <Ionicons name="person" size={18} color="#D97706" style={{ marginRight: 8 }} />
+                      <TextInput
+                        style={styles.debtorInputText}
+                        placeholder="Nama Santri (cth: Mas Fajar)..."
+                        placeholderTextColor="#A1A1AA"
+                        value={debtorName}
+                        onChangeText={setDebtorName}
+                      />
+                    </View>
+                    {nameHistory.length > 0 && (
+                      <View style={{ marginTop: 8 }}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          {nameHistory.map((n, idx) => (
+                            <TouchableOpacity
+                              key={idx}
+                              activeOpacity={0.7}
+                              style={styles.historyChip}
+                              onPress={() => setDebtorName(n!)}
+                            >
+                              <Text style={styles.historyChipText}>{n}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 {/* FIELD 1: PILIH BARANG (PEMASUKAN = LOCKED PICKER ONLY WITH SEARCH BAR) */}
                 <View style={styles.formGroup}>
                   <View style={styles.labelHeaderRow}>
                     <Text style={styles.label}>
-                      {transactionType === 'IN' ? 'Pilih Barang Inventori' : 'Cari / Nama Barang'}{' '}
+                      {transactionType === 'IN' ? 'Pilih Barang' : 'Cari / Nama Barang'}{' '}
                       <Text style={styles.requiredStar}>*</Text>
                     </Text>
-                    <TouchableOpacity onPress={handleGoToInventory}>
-                      <Text style={styles.addInventoryLink}>Daftar Inventori ➔</Text>
-                    </TouchableOpacity>
                   </View>
 
-                  {transactionType === 'IN' ? (
-                    /* PEMASUKAN MODE: STRICT PICKER TRIGGER CARD */
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={[
-                        styles.pickerTriggerBox,
-                        showSearchDropdown && styles.pickerTriggerBoxActive,
-                      ]}
-                      onPress={() => setShowSearchDropdown((prev) => !prev)}
-                    >
-                      <View style={styles.pickerTriggerLeft}>
-                        <View style={styles.lockBadgeIcon}>
-                          <Ionicons name="search-outline" size={18} color="#14A39F" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.pickerTriggerTitle,
-                              !name && { color: '#94A3B8', fontWeight: '500' },
-                            ]}
-                          >
-                            {name || 'Tekan untuk cari & pilih barang...'}
-                          </Text>
-                          {selectedInventoryItem ? (
-                            <Text style={styles.pickerTriggerSub}>
-                              {selectedInventoryItem.category} • Stok: {selectedInventoryItem.stock}{' '}
-                              {selectedInventoryItem.unit} • {formatRupiah(selectedInventoryItem.price)}
-                            </Text>
-                          ) : (
-                            <Text style={styles.pickerTriggerLockedNotice}>
-                              🔍 Cari barang terdaftar di inventori
-                            </Text>
-                          )}
-                        </View>
+                  {/* PICKER TRIGGER CARD (FOR BOTH IN AND OUT) */}
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[
+                      styles.pickerTriggerBox,
+                      showSearchDropdown && styles.pickerTriggerBoxActive,
+                    ]}
+                    onPress={() => setShowSearchDropdown((prev) => !prev)}
+                  >
+                    <View style={styles.pickerTriggerLeft}>
+                      <View style={styles.lockBadgeIcon}>
+                        <Ionicons name="search-outline" size={18} color="#14A39F" />
                       </View>
-
-                      <Ionicons
-                        name={showSearchDropdown ? 'chevron-up' : 'chevron-down'}
-                        size={20}
-                        color="#64748B"
-                      />
-                    </TouchableOpacity>
-                  ) : (
-                    /* PENGELUARAN MODE: FREE TEXT EDITABLE SEARCH INPUT */
-                    <View style={styles.searchInputBox}>
-                      <Ionicons name="search" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
-                      <TextInput
-                        style={styles.searchInputText}
-                        placeholder="Ketik nama barang (mis: Indomie, Susu)..."
-                        placeholderTextColor="#A1A1AA"
-                        value={name}
-                        onChangeText={(val) => {
-                          setName(val);
-                          setShowSearchDropdown(true);
-                        }}
-                        onFocus={() => setShowSearchDropdown(true)}
-                      />
-                      {name.length > 0 && (
-                        <TouchableOpacity onPress={() => setName('')}>
-                          <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                        </TouchableOpacity>
-                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.pickerTriggerTitle,
+                            !name && { color: '#94A3B8', fontWeight: '500' },
+                          ]}
+                        >
+                          {name || 'Cari atau pilih barang...'}
+                        </Text>
+                        {selectedInventoryItem ? (
+                          <Text style={styles.pickerTriggerSub}>
+                            {selectedInventoryItem.category} • Stok: {selectedInventoryItem.stock}{' '}
+                            {selectedInventoryItem.unit} • {formatRupiah(selectedInventoryItem.price)}
+                          </Text>
+                        ) : (
+                          <Text style={styles.pickerTriggerLockedNotice}>
+                            🔍 Cari barang terdaftar di inventori
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  )}
+
+                    <Ionicons
+                      name={showSearchDropdown ? 'chevron-up' : 'chevron-down'}
+                      size={20}
+                      color="#64748B"
+                    />
+                  </TouchableOpacity>
 
                   {/* DROPDOWN CONTAINER WITH INTEGRATED LIVE SEARCH BAR */}
                   {showSearchDropdown && (
                     <View style={styles.searchDropdownContainer}>
-                      {/* DEDICATED LIVE SEARCH INPUT INSIDE DROPDOWN FOR PEMASUKAN */}
-                      {transactionType === 'IN' && (
-                        <View style={styles.dropdownSearchInputBox}>
-                          <Ionicons name="search" size={16} color="#14A39F" style={{ marginRight: 8 }} />
-                          <TextInput
-                            style={styles.dropdownSearchInputText}
-                            placeholder="Cari nama atau kategori barang di inventori..."
-                            placeholderTextColor="#94A3B8"
-                            value={pickerSearchQuery}
-                            onChangeText={setPickerSearchQuery}
-                          />
-                          {pickerSearchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setPickerSearchQuery('')}>
-                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )}
+                      {/* DEDICATED LIVE SEARCH INPUT INSIDE DROPDOWN */}
+                      <View style={styles.dropdownSearchInputBox}>
+                        <Ionicons name="search" size={16} color="#14A39F" style={{ marginRight: 8 }} />
+                        <TextInput
+                          style={styles.dropdownSearchInputText}
+                          placeholder="Cari nama atau kategori barang di inventori..."
+                          placeholderTextColor="#94A3B8"
+                          value={pickerSearchQuery}
+                          onChangeText={setPickerSearchQuery}
+                        />
+                        {pickerSearchQuery.length > 0 && (
+                          <TouchableOpacity onPress={() => setPickerSearchQuery('')}>
+                            <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
 
                       <Text style={styles.dropdownHeaderTitle}>
-                        {transactionType === 'IN'
-                          ? `Daftar Barang Inventori (${matchingPickerItems.length} barang):`
-                          : 'Hasil Pencarian Inventori:'}
+                        Daftar Barang Inventori ({matchingPickerItems.length} barang):
                       </Text>
 
                       <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
-                        {(transactionType === 'IN' ? matchingPickerItems : matchingExpenseItems).length > 0 ? (
-                          (transactionType === 'IN' ? matchingPickerItems : matchingExpenseItems).map(
+                        {matchingPickerItems.length > 0 ? (
+                          matchingPickerItems.map(
                             (invItem) => {
                               const isOperasionalLocked =
                                 transactionType === 'IN' && invItem.category === 'Operasional';
@@ -577,84 +572,11 @@ export default function OrderModal({
                   )}
                 </View>
 
-                {/* FIELD 2: KATEGORI BARANG (OPERASIONAL IS LOCKED FOR PEMASUKAN) */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Kategori Barang</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
-                  >
-                    {CATEGORY_SUGGESTIONS.map((cat) => {
-                      const isSelected = category === cat;
-                      const isLocked = transactionType === 'IN' && cat === 'Operasional';
-
-                      return (
-                        <TouchableOpacity
-                          key={cat}
-                          activeOpacity={0.8}
-                          style={[
-                            styles.catChip,
-                            isSelected && styles.catChipActive,
-                            isLocked && styles.catChipLocked,
-                          ]}
-                          onPress={() => handleSelectCategoryChip(cat)}
-                        >
-                          {isLocked && (
-                            <Ionicons name="lock-closed" size={12} color="#94A3B8" style={{ marginRight: 4 }} />
-                          )}
-                          <Text
-                            style={[
-                              styles.catChipText,
-                              isSelected && styles.catChipTextActive,
-                              isLocked && styles.catChipTextLocked,
-                            ]}
-                          >
-                            {cat} {isLocked ? '(Dikunci)' : ''}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-
-                {/* FIELD 3: HARGA PER PICIS / UNIT (RP) */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>
-                    Harga per Picis / Unit (Rp) <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  {transactionType === 'IN' && selectedInventoryItem ? (
-                    /* Read-Only Preview for Pemasukan since Price comes from Inventory */
-                    <View style={styles.readOnlyPriceBox}>
-                      <Text style={styles.readOnlyPriceTextLabel}>
-                        {formatRupiah(price)} / {unit}
-                      </Text>
-                      <Text style={styles.readOnlySubText}>Standard Harga Inventori</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.inputPrefixBox}>
-                      <Text style={styles.inputPrefixText}>Rp</Text>
-                      <TextInput
-                        style={styles.prefixedInput}
-                        placeholder="Contoh: 3.500"
-                        placeholderTextColor="#A1A1AA"
-                        keyboardType="numeric"
-                        value={priceInput}
-                        onChangeText={(val) => {
-                          const numeric = val.replace(/[^0-9]/g, '');
-                          setPriceInput(numeric);
-                          setPrice(parseFloat(numeric) || 0);
-                        }}
-                      />
-                    </View>
-                  )}
-                </View>
-
-                {/* FIELD 4 & 5: JUMLAH (QTY) & SATUAN */}
+                {/* JUMLAH & ISI PER DUS */}
                 <View style={styles.rowGrid}>
                   {/* Stepper Kuantitas */}
                   <View style={[styles.formGroup, { flex: 1.2, marginRight: 10 }]}>
-                    <Text style={styles.label}>Jumlah (Qty)</Text>
+                    <Text style={styles.label}>Jumlah</Text>
                     <View style={styles.stepperContainer}>
                       <TouchableOpacity
                         activeOpacity={0.8}
@@ -664,7 +586,15 @@ export default function OrderModal({
                         <Ionicons name="remove" size={18} color="#FFFFFF" />
                       </TouchableOpacity>
 
-                      <Text style={styles.stepperValueText}>{quantity}</Text>
+                      <TextInput
+                        style={styles.stepperValueText}
+                        keyboardType="numeric"
+                        value={String(quantity)}
+                        onChangeText={(val) => {
+                          const num = parseInt(val.replace(/[^0-9]/g, ''), 10) || 1;
+                          setQuantity(num);
+                        }}
+                      />
 
                       <TouchableOpacity
                         activeOpacity={0.8}
@@ -676,37 +606,11 @@ export default function OrderModal({
                     </View>
                   </View>
 
-                  {/* Satuan Unit Selection */}
-                  <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>Satuan</Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 4 }}
-                    >
-                      {UNIT_OPTIONS.slice(0, 5).map((u) => {
-                        const isSelected = unit === u;
-                        return (
-                          <TouchableOpacity
-                            key={u}
-                            activeOpacity={0.8}
-                            style={[styles.unitMiniChip, isSelected && styles.unitMiniChipActive]}
-                            onPress={() => setUnit(u)}
-                          >
-                            <Text
-                              style={[
-                                styles.unitMiniChipText,
-                                isSelected && styles.unitMiniChipTextActive,
-                              ]}
-                            >
-                              {u}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                  {/* Empty space block for maintaining layout proportions */}
+                  <View style={[styles.formGroup, { flex: 1 }]} />
                 </View>
+
+
 
                 {/* TOTAL SUBTOTAL PREVIEW */}
                 <View style={styles.subtotalCard}>
@@ -751,57 +655,33 @@ export default function OrderModal({
                       </Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={[
-                        styles.paymentChip,
-                        paymentMethod === 'Hutang' && styles.paymentChipHutangActive,
-                      ]}
-                      onPress={() => setPaymentMethod('Hutang')}
-                    >
-                      <Ionicons
-                        name="time"
-                        size={16}
-                        color={paymentMethod === 'Hutang' ? '#FFFFFF' : '#D97706'}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text
+                    {transactionType === 'IN' && (
+                      <TouchableOpacity
+                        activeOpacity={0.8}
                         style={[
-                          styles.paymentChipText,
-                          paymentMethod === 'Hutang' && styles.paymentChipTextActive,
+                          styles.paymentChip,
+                          paymentMethod === 'Hutang' && styles.paymentChipHutangActive,
                         ]}
+                        onPress={() => setPaymentMethod('Hutang')}
                       >
-                        Hutang / Kasbon
-                      </Text>
-                    </TouchableOpacity>
+                        <Ionicons
+                          name="time"
+                          size={16}
+                          color={paymentMethod === 'Hutang' ? '#FFFFFF' : '#D97706'}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          style={[
+                            styles.paymentChipText,
+                            paymentMethod === 'Hutang' && styles.paymentChipTextActive,
+                          ]}
+                        >
+                          Hutang
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
-
-                {/* DYNAMIC FIELD: NAMA PENGHUTANG */}
-                {paymentMethod === 'Hutang' && (
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>
-                      Nama Yang Berhutang <Text style={styles.requiredStar}>*</Text>
-                    </Text>
-                    <View style={styles.debtorInputBox}>
-                      <Ionicons name="person" size={18} color="#D97706" style={{ marginRight: 8 }} />
-                      <TextInput
-                        style={styles.debtorInputText}
-                        placeholder={
-                          transactionType === 'IN'
-                            ? 'Nama Pelanggan (cth: Pak Budi, Mas Fajar)...'
-                            : 'Nama Supplier / Pihak Terkait...'
-                        }
-                        placeholderTextColor="#A1A1AA"
-                        value={debtorName}
-                        onChangeText={setDebtorName}
-                      />
-                    </View>
-                    <Text style={styles.debtorHintText}>
-                      📌 Transaksi ini akan otomatis masuk ke menu Daftar Hutang.
-                    </Text>
-                  </View>
-                )}
 
                 {/* ACTIONS */}
                 <View style={styles.actionRow}>
@@ -828,7 +708,7 @@ export default function OrderModal({
                     onPress={handleSave}
                   >
                     <Text style={styles.saveBtnText}>
-                      {isEditing ? 'Perbarui Transaksi' : 'Simpan Transaksi'}
+                      Simpan
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -845,19 +725,23 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   keyboardAvoidingView: {
+    flex: 1,
     width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContainer: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
+    borderRadius: 24,
+    paddingTop: 24,
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    maxHeight: '92%',
+    paddingBottom: 24,
+    width: '90%',
+    maxHeight: '85%',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -997,6 +881,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+
+  historyChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  historyChipText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
   },
   searchInputText: {
     flex: 1,
@@ -1315,18 +1214,18 @@ const styles = StyleSheet.create({
   debtorInputBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
-    borderColor: '#FDE68A',
-    borderRadius: 14,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
     paddingHorizontal: 14,
+    paddingVertical: 5,
   },
   debtorInputText: {
     flex: 1,
-    paddingVertical: 12,
     fontSize: 14,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#0F172A',
   },
   debtorHintText: {
     fontSize: 11,
@@ -1337,6 +1236,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
     marginTop: 8,
   },
@@ -1361,7 +1261,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   saveBtn: {
-    flex: 2,
+    flex: 1,
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: 'center',

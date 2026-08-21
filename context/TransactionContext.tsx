@@ -285,10 +285,9 @@ const INITIAL_TRANSACTIONS: TransactionItem[] = [
     unit: 'Pack',
     price: 35000,
     total: 175000,
-    paymentMethod: 'Hutang',
+    paymentMethod: 'Lunas',
     transactionType: 'OUT',
-    debtorName: 'CV Plastik Jaya (Supplier)',
-    debtStatus: 'Belum Lunas',
+    debtStatus: 'Lunas',
     monthKey: '2026-08',
     weekKey: 'W2',
     dateKey: '2026-08-12',
@@ -398,15 +397,15 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     const dayMap = ['day-sun', 'day-mon', 'day-tue', 'day-wed', 'day-thu', 'day-fri', 'day-sat'];
     const assignedDayId = targetDayId || dayMap[now.getDay()];
 
-    const timeText = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const timeText = `${h}:${m} WIB`;
     
     // Format full date text
-    const fullDateText = now.toLocaleDateString('id-ID', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    
+    const fullDateText = `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
 
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -549,7 +548,20 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
   };
 
   const markDebtAsPaid = (id: string) => {
-    toggleDebtStatus(id);
+    setTransactions((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            debtStatus: 'Lunas' as const,
+            paymentMethod: 'Lunas' as const,
+          };
+        }
+        return item;
+      });
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   return (
