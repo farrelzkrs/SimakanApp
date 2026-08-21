@@ -1,7 +1,7 @@
 import { InventoryItem, useInventory } from '@/context/InventoryContext';
 import { useTransactions } from '@/context/TransactionContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/context/NavigationContext';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -57,7 +57,7 @@ export default function OrderModal({
   initialData,
   defaultType = 'IN',
 }: OrderModalProps) {
-  const router = useRouter();
+  const { navigate } = useAppNavigation();
   const { inventoryItems } = useInventory();
   const { transactions, customers } = useTransactions();
   const isEditing = !!initialData?.id;
@@ -76,6 +76,12 @@ export default function OrderModal({
   const [debtorName, setDebtorName] = useState('');
   const [debtStatus, setDebtStatus] = useState<'Belum Lunas' | 'Lunas'>('Belum Lunas');
   const [transactionType, setTransactionType] = useState<'IN' | 'OUT'>(defaultType);
+
+  useEffect(() => {
+    if (transactionType === 'OUT' && paymentMethod !== 'Lunas') {
+      setPaymentMethod('Lunas');
+    }
+  }, [transactionType, paymentMethod]);
 
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [pickerSearchQuery, setPickerSearchQuery] = useState('');
@@ -203,13 +209,7 @@ export default function OrderModal({
       return;
     }
 
-    if (paymentMethod === 'Hutang' && !debtorName.trim()) {
-      Alert.alert(
-        'Nama Santri Wajib Diisi',
-        'Silakan masukkan nama santri yang berhutang.'
-      );
-      return;
-    }
+
 
     const parsedPrice = parseFloat(priceInput.replace(/[^0-9]/g, '')) || price || 0;
 
@@ -248,7 +248,7 @@ export default function OrderModal({
 
   const handleGoToInventory = () => {
     onClose();
-    router.push('/inventory');
+    navigate('inventory');
   };
 
   const formatRupiah = (num: number) => {
@@ -270,85 +270,85 @@ export default function OrderModal({
           style={styles.keyboardAvoidingView}
           pointerEvents="box-none"
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalContainer}>
+          <View style={styles.modalContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>
+                {isEditing
+                  ? 'Edit Transaksi'
+                  : transactionType === 'OUT'
+                  ? 'Tambah Pengeluaran'
+                  : 'Tambah Pemasukan'}
+              </Text>
+            </View>
 
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.scrollContent}
+            <View style={[styles.typeToggleContainer, { marginBottom: 16 }]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  styles.typeToggleBtn,
+                  transactionType === 'IN' && styles.typeToggleBtnInActive,
+                ]}
+                onPress={() => {
+                  setTransactionType('IN');
+                  if (category === 'Operasional') {
+                    setCategory('Makanan');
+                  }
+                }}
               >
-                {/* Header */}
-                <View style={styles.header}>
-                  <Text style={styles.title}>
-                    {isEditing
-                      ? 'Edit Transaksi'
-                      : transactionType === 'OUT'
-                      ? 'Tambah Pengeluaran'
-                      : 'Tambah Pemasukan'}
-                  </Text>
-                </View>
+                <Ionicons
+                  name="arrow-down-circle"
+                  size={18}
+                  color={transactionType === 'IN' ? '#FFFFFF' : '#16A34A'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.typeToggleText,
+                    transactionType === 'IN' && styles.typeToggleTextActive,
+                  ]}
+                >
+                  Pemasukan
+                </Text>
+              </TouchableOpacity>
 
-                {/* Switcher Tipe Transaksi (Pemasukan vs Pengeluaran) */}
-                <View style={styles.typeToggleContainer}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={[
-                      styles.typeToggleBtn,
-                      transactionType === 'IN' && styles.typeToggleBtnInActive,
-                    ]}
-                    onPress={() => {
-                      setTransactionType('IN');
-                      if (category === 'Operasional') {
-                        setCategory('Makanan');
-                      }
-                    }}
-                  >
-                    <Ionicons
-                      name="arrow-down-circle"
-                      size={18}
-                      color={transactionType === 'IN' ? '#FFFFFF' : '#16A34A'}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={[
-                        styles.typeToggleText,
-                        transactionType === 'IN' && styles.typeToggleTextActive,
-                      ]}
-                    >
-                      Pemasukan
-                    </Text>
-                  </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  styles.typeToggleBtn,
+                  transactionType === 'OUT' && styles.typeToggleBtnOutActive,
+                ]}
+                onPress={() => setTransactionType('OUT')}
+              >
+                <Ionicons
+                  name="arrow-up-circle"
+                  size={18}
+                  color={transactionType === 'OUT' ? '#FFFFFF' : '#DC2626'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.typeToggleText,
+                    transactionType === 'OUT' && styles.typeToggleTextActive,
+                  ]}
+                >
+                  Pengeluaran
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={[
-                      styles.typeToggleBtn,
-                      transactionType === 'OUT' && styles.typeToggleBtnOutActive,
-                    ]}
-                    onPress={() => setTransactionType('OUT')}
-                  >
-                    <Ionicons
-                      name="arrow-up-circle"
-                      size={18}
-                      color={transactionType === 'OUT' ? '#FFFFFF' : '#DC2626'}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={[
-                        styles.typeToggleText,
-                        transactionType === 'OUT' && styles.typeToggleTextActive,
-                      ]}
-                    >
-                      Pengeluaran
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={styles.scrollContent}
+              style={{ flexShrink: 1 }}
+            >
 
                 {/* DYNAMIC FIELD: NAMA PEMBELI / PENERIMA */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>
-                    {transactionType === 'IN' ? 'Nama Santri / Pembeli' : 'Nama Penerima / Toko'} <Text style={styles.requiredStar}>*</Text>
+                    {transactionType === 'IN' ? 'Nama Santri / Pembeli' : 'Nama Penerima / Toko'}
                   </Text>
                   <View style={styles.debtorInputBox}>
                     <Ionicons name={transactionType === 'IN' ? "person" : "storefront"} size={18} color="#D97706" style={{ marginRight: 8 }} />
@@ -632,35 +632,35 @@ export default function OrderModal({
                   </Text>
                 </View>
 
-                {/* METODE PEMBAYARAN */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Metode Pembayaran</Text>
-                  <View style={styles.paymentMethodRow}>
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={[
-                        styles.paymentChip,
-                        paymentMethod === 'Lunas' && styles.paymentChipLunasActive,
-                      ]}
-                      onPress={() => setPaymentMethod('Lunas')}
-                    >
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={16}
-                        color={paymentMethod === 'Lunas' ? '#FFFFFF' : '#16A34A'}
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text
+                {/* METODE PEMBAYARAN - HANYA UNTUK PEMASUKAN */}
+                {transactionType === 'IN' && (
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Metode Pembayaran</Text>
+                    <View style={styles.paymentMethodRow}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
                         style={[
-                          styles.paymentChipText,
-                          paymentMethod === 'Lunas' && styles.paymentChipTextActive,
+                          styles.paymentChip,
+                          paymentMethod === 'Lunas' && styles.paymentChipLunasActive,
                         ]}
+                        onPress={() => setPaymentMethod('Lunas')}
                       >
-                        Lunas
-                      </Text>
-                    </TouchableOpacity>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={16}
+                          color={paymentMethod === 'Lunas' ? '#FFFFFF' : '#16A34A'}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          style={[
+                            styles.paymentChipText,
+                            paymentMethod === 'Lunas' && styles.paymentChipTextActive,
+                          ]}
+                        >
+                          Lunas
+                        </Text>
+                      </TouchableOpacity>
 
-                    {transactionType === 'IN' && (
                       <TouchableOpacity
                         activeOpacity={0.8}
                         style={[
@@ -684,41 +684,41 @@ export default function OrderModal({
                           Hutang
                         </Text>
                       </TouchableOpacity>
-                    )}
+                    </View>
                   </View>
-                </View>
+                )}
 
-                {/* ACTIONS */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 8, paddingHorizontal: 4, gap: 10 }}>
-                  <TouchableOpacity activeOpacity={0.8} style={[styles.cancelBtn, { flex: 1 }]} onPress={onClose}>
-                    <Text style={styles.cancelBtnText}>Batal</Text>
-                  </TouchableOpacity>
-
-                  {isEditing && (
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' }}
-                      onPress={handleDelete}
-                    >
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#DC2626' }}>Hapus</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[
-                      styles.saveBtn,
-                      transactionType === 'IN' ? styles.saveBtnIn : styles.saveBtnOut,
-                      { flex: 1 }
-                    ]}
-                    onPress={handleSave}
-                  >
-                    <Text style={styles.saveBtnText}>Simpan</Text>
-                  </TouchableOpacity>
-                </View>
               </ScrollView>
+
+              {/* ACTIONS */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, marginTop: 8, paddingHorizontal: 4, gap: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+                <TouchableOpacity activeOpacity={0.8} style={[styles.cancelBtn, { flex: 1 }]} onPress={onClose}>
+                  <Text style={styles.cancelBtnText}>Batal</Text>
+                </TouchableOpacity>
+
+                {isEditing && (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' }}
+                    onPress={handleDelete}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#DC2626' }}>Hapus</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[
+                    styles.saveBtn,
+                    transactionType === 'IN' ? styles.saveBtnIn : styles.saveBtnOut,
+                    { flex: 1 }
+                  ]}
+                  onPress={handleSave}
+                >
+                  <Text style={styles.saveBtnText}>Simpan</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </View>
     </Modal>

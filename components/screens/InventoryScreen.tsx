@@ -13,12 +13,17 @@ import {
   TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Alert,
+  Pressable,
+  Keyboard,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+
 import { useInventory, InventoryItem } from '@/context/InventoryContext';
+import { useDatabase } from '@/hooks/use-database';
+import { InventoryService } from '@/services/InventoryService';
+import { useTransactions } from '@/context/TransactionContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,9 +35,10 @@ const CATEGORIES = [
 const UNITS = ['Pcs', 'Dus'];
 
 export default function InventoryScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
+  const { db } = useDatabase();
+  const { addTransaction } = useTransactions();
 
   const { inventoryItems, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useInventory();
 
@@ -50,6 +56,8 @@ export default function InventoryScreen() {
   const [priceInput, setPriceInput] = useState('');
   const [sellingPriceInput, setSellingPriceInput] = useState('');
   const [pcsPerDus, setPcsPerDus] = useState('');
+  const [initialStock, setInitialStock] = useState(0);
+  const [recordAsExpense, setRecordAsExpense] = useState(false);
 
   const filteredItems = inventoryItems.filter((item) => {
     const matchesSearch =
@@ -78,20 +86,39 @@ export default function InventoryScreen() {
     setPriceInput('');
     setSellingPriceInput('');
     setPcsPerDus('');
+    setInitialStock(0);
+    setRecordAsExpense(true);
     setModalVisible(true);
   };
 
-  const handleOpenEditModal = (item: InventoryItem) => {
-    setEditingId(item.id);
-    setName(item.name);
-    setCategory(item.category);
-    setStock(item.stock);
-    setUnit(item.unit === 'Dus' ? 'Dus' : 'Pcs');
-    setSellingUnit('Pcs');
-    setPriceInput(item.price ? parseInt(String(item.price), 10).toLocaleString('id-ID') : '');
-    setSellingPriceInput(item.sellingPrice ? parseInt(String(item.sellingPrice), 10).toLocaleString('id-ID') : '');
-    setPcsPerDus('');
-    setModalVisible(true);
+  const handleOpenEditModal = async (item: InventoryItem) => {
+    try {
+      if (!db) {
+        Alert.alert("Error", "Database belum siap.");
+        return;
+      }
+      const svc = new InventoryService(db);
+      const dbItem = await svc.getItemById(Number(item.id));
+      if (dbItem) {
+        setEditingId(String(dbItem.id));
+        setName(dbItem.name);
+        setCategory(dbItem.category || 'Umum');
+        setStock(dbItem.stock || 0);
+        setUnit(dbItem.unit === 'Dus' ? 'Dus' : 'Pcs');
+        setSellingUnit('Pcs');
+        setPriceInput(dbItem.purchase_price ? parseInt(String(dbItem.purchase_price), 10).toLocaleString('id-ID') : '');
+        setSellingPriceInput(dbItem.selling_price ? parseInt(String(dbItem.selling_price), 10).toLocaleString('id-ID') : '');
+        setPcsPerDus('');
+        setInitialStock(dbItem.stock || 0);
+        setRecordAsExpense(false);
+        setModalVisible(true);
+      } else {
+        Alert.alert("Error", "Item tidak ditemukan di database.");
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "Gagal mengambil data dari database.");
+    }
   };
 
   const handleSaveInventory = () => {
@@ -105,11 +132,19 @@ export default function InventoryScreen() {
 
     let finalStock = stock;
     let finalUnit = unit;
+    let finalPurchasePrice = parsedPrice;
+    let finalSellingPrice = parsedSellingPrice;
 
     if (unit === 'Dus') {
       const multiplier = parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1;
       finalStock = stock * multiplier;
       finalUnit = 'Pcs';
+      finalPurchasePrice = Math.round(parsedPrice / multiplier);
+    }
+
+    if (sellingUnit === 'Dus') {
+      const multiplier = parseInt(pcsPerDus.replace(/[^0-9]/g, ''), 10) || 1;
+      finalSellingPrice = Math.round(parsedSellingPrice / multiplier);
     }
 
     if (editingId) {
@@ -118,8 +153,8 @@ export default function InventoryScreen() {
         category,
         stock: finalStock,
         unit: finalUnit,
-        price: parsedPrice,
-        sellingPrice: parsedSellingPrice,
+        price: finalPurchasePrice,
+        sellingPrice: finalSellingPrice,
       });
     } else {
       addInventoryItem({
@@ -127,9 +162,25 @@ export default function InventoryScreen() {
         category,
         stock: finalStock,
         unit: finalUnit,
-        price: parsedPrice,
-        sellingPrice: parsedSellingPrice,
+        price: finalPurchasePrice,
+        sellingPrice: finalSellingPrice,
       });
+    }
+
+    if (recordAsExpense) {
+      const addedStock = finalStock - initialStock;
+      if (addedStock > 0) {
+        addTransaction({
+          name: `Restock: ${name.trim()}`,
+          category: 'Operasional',
+          stock: finalStock,
+          quantity: addedStock,
+          unit: finalUnit,
+          price: finalPurchasePrice,
+          paymentMethod: 'Lunas',
+          transactionType: 'OUT',
+        });
+      }
     }
 
     setModalVisible(false);
@@ -267,7 +318,12 @@ export default function InventoryScreen() {
               <View style={styles.itemHeader}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.itemTitleRow}>
-                    <Text style={styles.itemName}>{item.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, marginRight: 8 }}>
+                      <Text style={[styles.itemName, { flexShrink: 1 }]} numberOfLines={1}>{item.name}</Text>
+                      <View style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 8 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#475569' }}>{item.category}</Text>
+                      </View>
+                    </View>
                     <View
                       style={[
                         styles.statusBadge,
@@ -292,16 +348,14 @@ export default function InventoryScreen() {
                   </View>
 
                   <View style={styles.itemMetaRow}>
-                    <Text style={styles.itemCategory}>{item.category}</Text>
-                    <Text style={styles.dotSeparator}>•</Text>
                     <Text style={styles.itemPricePerPicis}>
-                      Modal: <Text style={styles.priceHighlight}>{formatRupiah(item.price)}</Text>
+                      Modal / {item.unit}: <Text style={styles.priceHighlight}>{formatRupiah(item.price)}</Text>
                     </Text>
                     {item.sellingPrice > 0 && (
                       <>
                         <Text style={styles.dotSeparator}>•</Text>
                         <Text style={styles.itemPricePerPicis}>
-                          Jual: <Text style={styles.priceHighlightJual}>{formatRupiah(item.sellingPrice)}</Text>
+                          Jual / {item.unit}: <Text style={styles.priceHighlightJual}>{formatRupiah(item.sellingPrice)}</Text>
                         </Text>
                       </>
                     )}
@@ -372,14 +426,20 @@ export default function InventoryScreen() {
         transparent
         onRequestClose={() => setModalVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={{ width: '100%', alignItems: 'center' }}
-            >
-              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                <View style={styles.modalContentCard}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Keyboard.dismiss();
+              setModalVisible(false);
+            }}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%', alignItems: 'center' }}
+            pointerEvents="box-none"
+          >
+            <View style={styles.modalContentCard}>
                   {/* Modal Header */}
                   <View style={styles.modalHeaderRow}>
                     <View style={styles.modalHeaderTitleBox}>
@@ -404,7 +464,12 @@ export default function InventoryScreen() {
 
                   <View style={styles.modalDivider} />
 
-                  <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+                  <ScrollView 
+                    style={{ maxHeight: 460 }} 
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                  >
                     {/* Form Field 1: Nama Barang */}
                     <View style={styles.fieldContainer}>
                       <Text style={styles.fieldLabel}>
@@ -455,9 +520,31 @@ export default function InventoryScreen() {
 
                     {/* Form Field 3: Harga Satuan (Beli) */}
                     <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>
-                        {unit === 'Dus' ? 'Harga Beli per Dus' : 'Harga Beli per Picis'}<Text style={styles.requiredStar}>*</Text>
-                      </Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>
+                          Harga Beli per {unit} <Text style={styles.requiredStar}>*</Text>
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          <TouchableOpacity
+                            onPress={() => setUnit('Pcs')}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#F1F5F9' },
+                              unit === 'Pcs' && { backgroundColor: '#0F172A' }
+                            ]}
+                          >
+                            <Text style={[{ fontSize: 12, fontWeight: '600', color: '#64748B' }, unit === 'Pcs' && { color: '#FFFFFF' }]}>Pcs</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => setUnit('Dus')}
+                            style={[
+                              { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#F1F5F9' },
+                              unit === 'Dus' && { backgroundColor: '#0F172A' }
+                            ]}
+                          >
+                            <Text style={[{ fontSize: 12, fontWeight: '600', color: '#64748B' }, unit === 'Dus' && { color: '#FFFFFF' }]}>Dus</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                       <View style={styles.inputPrefixBox}>
                         <Text style={styles.inputPrefixText}>Rp</Text>
                         <TextInput
@@ -609,39 +696,33 @@ export default function InventoryScreen() {
                       </View>
                     </View>
 
-                    {/* Form Field 5: Satuan Barang */}
-                    <View style={styles.fieldContainer}>
-                      <Text style={styles.fieldLabel}>Satuan Unit</Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 6 }}
-                      >
-                        {UNITS.map((u) => {
-                          const isSelected = unit === u;
-                          return (
-                            <TouchableOpacity
-                              key={u}
-                              activeOpacity={0.8}
-                              style={[
-                                styles.unitChip,
-                                isSelected && styles.unitChipActive,
-                              ]}
-                              onPress={() => setUnit(u)}
-                            >
-                              <Text
-                                style={[
-                                  styles.unitChipText,
-                                  isSelected && styles.unitChipTextActive,
-                                ]}
-                              >
-                                {u}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
+                    {/* Checkbox Otomatis Catat Pengeluaran */}
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => setRecordAsExpense(!recordAsExpense)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginTop: 12,
+                        marginBottom: 16,
+                        backgroundColor: recordAsExpense ? '#F0FDF4' : '#F8FAFC',
+                        padding: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: recordAsExpense ? '#86EFAC' : '#E2E8F0',
+                      }}
+                    >
+                      <Ionicons
+                        name={recordAsExpense ? "checkbox" : "square-outline"}
+                        size={22}
+                        color={recordAsExpense ? "#16A34A" : "#94A3B8"}
+                        style={{ marginRight: 10 }}
+                      />
+                      <Text style={{ fontSize: 13, color: recordAsExpense ? '#166534' : '#475569', flex: 1, lineHeight: 18 }}>
+                        <Text style={{ fontWeight: '600' }}>Catat Tambah Stok sebagai Pengeluaran</Text>
+                      </Text>
+                    </TouchableOpacity>
+
                   </ScrollView>
 
                   {/* Modal Footer Save Actions */}
@@ -663,34 +744,11 @@ export default function InventoryScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
           </View>
-        </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Bottom Navigation Bar */}
-      <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => router.replace('/dashboard')}
-        >
-          <Ionicons name="home-outline" size={26} color="#94A3B8" />
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => router.replace('/statistics')}
-        >
-          <Ionicons name="book-outline" size={24} color="#94A3B8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity activeOpacity={0.7} style={styles.navItem}>
-          <Ionicons name="cube" size={26} color="#14A39F" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

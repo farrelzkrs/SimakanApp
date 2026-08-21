@@ -16,7 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useAppNavigation } from '@/context/NavigationContext';
 import OrderModal, { OrderFormData } from '@/components/OrderModal';
 import { useTransactions, TransactionItem as ContextTransactionItem } from '@/context/TransactionContext';
 import { useInventory } from '@/context/InventoryContext';
@@ -64,14 +64,14 @@ function mapContextToDashboard(t: ContextTransactionItem): DashboardTransactionI
 }
 
 export default function DashboardScreen() {
-  const router = useRouter();
+  const { navigate } = useAppNavigation();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
   const { transactions: contextTransactions, addTransaction, updateTransaction, markDebtAsPaid, deleteTransaction: contextDeleteTransaction } = useTransactions();
   const { adjustStockByItemName, registerOrRestockExpenseItem } = useInventory();
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('income');
-  const [activeNav, setActiveNav] = useState<'home' | 'chart' | 'wallet'>('home');
+
 
   const transactions = useMemo(() => contextTransactions.map(mapContextToDashboard), [contextTransactions]);
 
@@ -296,9 +296,9 @@ export default function DashboardScreen() {
               style={styles.graphicCardInner}
               onPress={() => {
                 if (isIncome) {
-                  router.push('/rekap-pemasukan');
+                  navigate('rekap-pemasukan');
                 } else {
-                  router.push('/rekap-pengeluaran');
+                  navigate('rekap-pengeluaran');
                 }
               }}
             >
@@ -404,9 +404,9 @@ export default function DashboardScreen() {
                 style={styles.seeMoreBtn}
                 onPress={() => {
                   if (isIncome) {
-                    router.push('/rekap-pemasukan');
+                    navigate('rekap-pemasukan');
                   } else {
-                    router.push('/rekap-pengeluaran');
+                    navigate('rekap-pengeluaran');
                   }
                 }}
               >
@@ -549,50 +549,7 @@ export default function DashboardScreen() {
         </View>
       </Modal>
 
-      {/* Bottom Nav */}
-      <View style={[styles.bottomNav, { paddingBottom: bottomInset, height: 60 + bottomInset }]}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => setActiveNav('home')}
-        >
-          <Ionicons
-            name={activeNav === 'home' ? 'home' : 'home-outline'}
-            size={26}
-            color={activeNav === 'home' ? '#14A39F' : '#94A3B8'}
-          />
-        </TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav('chart');
-            router.replace('/statistics');
-          }}
-        >
-          <Ionicons
-            name={activeNav === 'chart' ? 'book' : 'book-outline'}
-            size={24}
-            color={activeNav === 'chart' ? '#14A39F' : '#94A3B8'}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          style={styles.navItem}
-          onPress={() => {
-            setActiveNav('wallet');
-            router.replace('/inventory');
-          }}
-        >
-          <Ionicons
-            name={activeNav === 'wallet' ? 'cube' : 'cube-outline'}
-            size={26}
-            color={activeNav === 'wallet' ? '#14A39F' : '#94A3B8'}
-          />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
